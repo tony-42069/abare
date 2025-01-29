@@ -1,0 +1,21 @@
+[submodule "repos/ai-underwriting"]
+	path = repos/ai-underwriting
+	url = https://github.com/tony-42069/ai-underwriting.git
+[submodule "repos/cre-chatbot-rag"]
+	path = repos/cre-chatbot-rag
+	url = https://github.com/tony-42069/cre-chatbot-rag.git
+[submodule "repos/cre-analyzer"]
+	path = repos/cre-analyzer
+	url = https://github.com/tony-42069/cre-analyzer.git
+[submodule "repos/cre-om-builder"]
+	path = repos/cre-om-builder
+	url = https://github.com/tony-42069/cre-om-builder.git
+[submodule "repos/cre-conversational-agent"]
+	path = repos/cre-conversational-agent
+	url = https://github.com/tony-42069/cre-conversational-agent.git
+[submodule "repos/10-year-treasury-tracker"]
+	path = repos/10-year-treasury-tracker
+	url = https://github.com/tony-42069/10-year-treasury-tracker.git
+[submodule "repos/cre-sofr-spreads-dashboard"]
+	path = repos/cre-sofr-spreads-dashboard
+	url = https://github.com/tony-42069/cre-sofr-spreads-dashboard.git
