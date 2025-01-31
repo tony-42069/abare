@@ -44,6 +44,33 @@
 - **Timeline**: 3 days
 - **Dependencies**: CRE Analyzer
 
+### 7. ABARE Platform Monorepo (New)
+- **Status**: Initial setup with TypeScript configuration and workspace management
+- **Plan**: 
+  * Complete module resolution for core/analytics/market-data
+  * Implement shared UI components
+  * Set up unified build system
+  * Integrate existing repositories
+- **Priority**: High (Core Integration)
+- **Timeline**: 7 days
+- **Dependencies**: All other repositories for integration
+
+Technical Details:
+- Monorepo Structure:
+  * Core package: Base functionality and types
+  * Analytics package: Financial and market analysis
+  * Market-data package: SOFR and treasury data
+  * UI package: Shared components
+- Build System:
+  * pnpm workspaces
+  * TypeScript project references
+  * Turborepo for build orchestration
+- Integration Points:
+  * Shared type definitions
+  * Common UI components
+  * Unified state management
+  * Cross-package dependencies
+
 ## Recommended Development Order
 
 1. **Week 1: Core Infrastructure**
