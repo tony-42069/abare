@@ -19,3 +19,6 @@
 [submodule "repos/cre-sofr-spreads-dashboard"]
 	path = repos/cre-sofr-spreads-dashboard
 	url = https://github.com/tony-42069/cre-sofr-spreads-dashboard.git
+[submodule "repos/abare-platform"]
+	path = repos/abare-platform
+	url = https://github.com/tony-42069/abare-platform.git
