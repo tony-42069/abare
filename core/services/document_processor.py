@@ -15,13 +15,11 @@ from typing import Dict, List, Tuple, Any
 import numpy as np
 
 # Import extractors from the repos directory
-import sys
-sys.path.append("repos/ai-underwriting")
-from backend.services.extractors.base import BaseExtractor
-from backend.services.extractors.rent_roll import RentRollExtractor
-from backend.services.extractors.pl_statement import PLStatementExtractor
-from backend.services.extractors.operating_statement import OperatingStatementExtractor
-from backend.services.extractors.lease import LeaseExtractor
+from repos.ai_underwriting.backend.services.extractors.base import BaseExtractor
+from repos.ai_underwriting.backend.services.extractors.rent_roll import RentRollExtractor
+from repos.ai_underwriting.backend.services.extractors.pl_statement import PLStatementExtractor
+from repos.ai_underwriting.backend.services.extractors.operating_statement import OperatingStatementExtractor
+from repos.ai_underwriting.backend.services.extractors.lease import LeaseExtractor
 
 from config.settings import (
     AZURE_OPENAI_ENDPOINT,

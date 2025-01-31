@@ -4,7 +4,7 @@ API router for document-related endpoints with enhanced processing capabilities.
 import os
 from typing import List, Optional
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Query
-from motor.motor_asyncio import AsyncIOMotorDatabase
+from pymongo.database import Database
 from fastapi import Request
 import logging
 from bson import ObjectId
@@ -16,7 +16,8 @@ from config.settings import UPLOAD_DIR
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-async def get_database(request: Request) -> AsyncIOMotorDatabase:
+async def get_database(request: Request) -> Database:
+    """Get MongoDB database instance."""
     return request.app.mongodb
 
 @router.post("/upload", response_model=Document)
@@ -24,7 +25,7 @@ async def upload_document(
     file: UploadFile = File(...),
     property_id: Optional[str] = Query(None, description="Associated property ID"),
     document_type: Optional[str] = Query(None, description="Document type (e.g., rent_roll, operating_statement)"),
-    db: AsyncIOMotorDatabase = Depends(get_database)
+    db: Database = Depends(get_database)
 ):
     """
     Upload and process a new document with specialized extraction.
@@ -57,7 +58,7 @@ async def upload_document(
         )
         
         # Insert document record
-        result = await db.documents.insert_one(document.dict(by_alias=True))
+        result = db.documents.insert_one(document.dict(by_alias=True))
         document.id = str(result.inserted_id)
         
         # Process document asynchronously
@@ -115,7 +116,7 @@ async def upload_document(
             }
         
         # Update document record
-        await db.documents.update_one(
+        db.documents.update_one(
             {"_id": result.inserted_id},
             {"$set": update_data}
         )
@@ -132,13 +133,13 @@ async def upload_document(
 @router.get("/{document_id}", response_model=Document)
 async def get_document(
     document_id: str,
-    db: AsyncIOMotorDatabase = Depends(get_database)
+    db: Database = Depends(get_database)
 ):
     """Get document by ID."""
     from bson import ObjectId
     
     try:
-        document = await db.documents.find_one({"_id": ObjectId(document_id)})
+        document = db.documents.find_one({"_id": ObjectId(document_id)})
         if not document:
             raise HTTPException(status_code=404, detail="Document not found")
         return document
@@ -157,7 +158,7 @@ async def list_documents(
     property_id: Optional[str] = None,
     document_type: Optional[str] = None,
     status: Optional[str] = None,
-    db: AsyncIOMotorDatabase = Depends(get_database)
+    db: Database = Depends(get_database)
 ):
     """
     List documents with filtering and pagination.
@@ -180,8 +181,7 @@ async def list_documents(
             query["status"] = status
             
         # Execute query with filters
-        cursor = db.documents.find(query).skip(skip).limit(limit)
-        documents = await cursor.to_list(length=limit)
+        documents = list(db.documents.find(query).skip(skip).limit(limit))
         return documents
         
     except Exception as e:
@@ -195,12 +195,12 @@ async def list_documents(
 @router.delete("/{document_id}")
 async def delete_document(
     document_id: str,
-    db: AsyncIOMotorDatabase = Depends(get_database)
+    db: Database = Depends(get_database)
 ):
     """Delete a document by ID."""
     try:
         # Get document to check file path
-        document = await db.documents.find_one({"_id": ObjectId(document_id)})
+        document = db.documents.find_one({"_id": ObjectId(document_id)})
         if not document:
             raise HTTPException(status_code=404, detail="Document not found")
         
@@ -213,7 +213,7 @@ async def delete_document(
                 # Continue with document deletion even if file deletion fails
         
         # Delete document record
-        result = await db.documents.delete_one({"_id": ObjectId(document_id)})
+        result = db.documents.delete_one({"_id": ObjectId(document_id)})
         if result.deleted_count == 0:
             raise HTTPException(status_code=404, detail="Document not found")
         

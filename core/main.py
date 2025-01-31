@@ -4,7 +4,7 @@ Main FastAPI application for the ABARE platform.
 import logging
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import MongoClient
 
 from config.settings import (
     PROJECT_NAME,
@@ -39,7 +39,7 @@ app.add_middleware(
 @app.on_event("startup")
 async def startup_db_client():
     try:
-        app.mongodb_client = AsyncIOMotorClient(MONGODB_URL)
+        app.mongodb_client = MongoClient(MONGODB_URL)
         app.mongodb = app.mongodb_client[MONGODB_DB_NAME]
         logger.info("Connected to MongoDB")
     except Exception as e:
@@ -56,7 +56,7 @@ async def shutdown_db_client():
 async def health_check():
     try:
         # Check MongoDB connection
-        await app.mongodb.command("ping")
+        app.mongodb.command("ping")
         return {
             "status": "healthy",
             "services": {
