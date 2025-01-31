@@ -5,19 +5,23 @@ and specialized document extractors.
 import logging
 import importlib
 import os
+import json
 from typing import List, Tuple, Dict, Any, Optional, Type
 from io import BytesIO
 
 import PyPDF2
-import chromadb
-from chromadb.config import Settings
 from openai import AzureOpenAI
+from typing import Dict, List, Tuple, Any
+import numpy as np
 
-from repos.ai_underwriting.backend.services.extractors.base import BaseExtractor
-from repos.ai_underwriting.backend.services.extractors.rent_roll import RentRollExtractor
-from repos.ai_underwriting.backend.services.extractors.pl_statement import PLStatementExtractor
-from repos.ai_underwriting.backend.services.extractors.operating_statement import OperatingStatementExtractor
-from repos.ai_underwriting.backend.services.extractors.lease import LeaseExtractor
+# Import extractors from the repos directory
+import sys
+sys.path.append("repos/ai-underwriting")
+from backend.services.extractors.base import BaseExtractor
+from backend.services.extractors.rent_roll import RentRollExtractor
+from backend.services.extractors.pl_statement import PLStatementExtractor
+from backend.services.extractors.operating_statement import OperatingStatementExtractor
+from backend.services.extractors.lease import LeaseExtractor
 
 from config.settings import (
     AZURE_OPENAI_ENDPOINT,
@@ -43,12 +47,9 @@ class DocumentProcessor:
         self.deployment_name = AZURE_OPENAI_DEPLOYMENT_NAME
         self.embedding_deployment_name = AZURE_OPENAI_EMBEDDING_DEPLOYMENT_NAME
         
-        # Initialize ChromaDB
-        self.chroma_client = chromadb.Client(Settings(anonymized_telemetry=False))
-        self.collection = self.chroma_client.get_or_create_collection(
-            name="abare_docs",
-            metadata={"hnsw:space": "cosine"}
-        )
+        # Initialize in-memory vector store
+        self.document_store: Dict[str, Dict[str, Any]] = {}
+        self.embeddings_store: Dict[str, List[float]] = {}
         
         # Initialize document extractors
         self.extractors: List[BaseExtractor] = [
@@ -162,13 +163,14 @@ class DocumentProcessor:
             timestamp = int(time.time())
             ids = [f"{timestamp}_{i}" for i in range(len(chunks))]
             
-            # Store in vector database
-            self.collection.add(
-                embeddings=embeddings,
-                documents=chunk_texts,
-                ids=ids,
-                metadatas=[chunk[1] for chunk in chunks]
-            )
+            # Store in memory
+            for i, (text, embedding) in enumerate(zip(chunk_texts, embeddings)):
+                doc_id = f"{timestamp}_{i}"
+                self.document_store[doc_id] = {
+                    "text": text,
+                    "metadata": chunks[i][1]
+                }
+                self.embeddings_store[doc_id] = embedding
             
             # If no specialized extractor or additional analysis needed
             if not extractor:
@@ -225,14 +227,20 @@ class DocumentProcessor:
             # Create embedding for the question
             question_embedding = self.create_embeddings([question])[0]
             
-            # Query vector store
-            results = self.collection.query(
-                query_embeddings=[question_embedding],
-                n_results=k
-            )
+            # Calculate cosine similarity
+            similarities = {}
+            for doc_id, doc_embedding in self.embeddings_store.items():
+                similarity = np.dot(question_embedding, doc_embedding) / (
+                    np.linalg.norm(question_embedding) * np.linalg.norm(doc_embedding)
+                )
+                similarities[doc_id] = similarity
+            
+            # Get top k results
+            top_k = sorted(similarities.items(), key=lambda x: x[1], reverse=True)[:k]
+            relevant_docs = [self.document_store[doc_id]["text"] for doc_id, _ in top_k]
             
             # Prepare context from retrieved documents
-            context = "\n".join(results['documents'][0])
+            context = "\n".join(relevant_docs)
             
             # Generate answer using Azure OpenAI
             messages = [
@@ -252,7 +260,7 @@ class DocumentProcessor:
             return {
                 "answer": answer,
                 "context": context,
-                "source_documents": results['documents'][0]
+                "source_documents": relevant_docs
             }
             
         except Exception as e:

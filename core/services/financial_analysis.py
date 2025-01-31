@@ -10,7 +10,11 @@ from datetime import datetime
 from decimal import Decimal
 
 from openai import AzureOpenAI
-from repos.ai_underwriting.backend.services.extractors.base import BaseExtractor
+
+# Import extractors from the repos directory
+import sys
+sys.path.append("repos/ai-underwriting")
+from backend.services.extractors.base import BaseExtractor
 from config.settings import (
     AZURE_OPENAI_ENDPOINT,
     AZURE_OPENAI_API_KEY,
