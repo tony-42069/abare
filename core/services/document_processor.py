@@ -1,14 +1,23 @@
 """
-Enhanced document processing service that combines PDF processing and RAG capabilities.
+Enhanced document processing service that combines PDF processing, RAG capabilities,
+and specialized document extractors.
 """
 import logging
-from typing import List, Tuple, Dict, Any, Optional
+import importlib
+import os
+from typing import List, Tuple, Dict, Any, Optional, Type
 from io import BytesIO
 
 import PyPDF2
 import chromadb
 from chromadb.config import Settings
 from openai import AzureOpenAI
+
+from repos.ai_underwriting.backend.services.extractors.base import BaseExtractor
+from repos.ai_underwriting.backend.services.extractors.rent_roll import RentRollExtractor
+from repos.ai_underwriting.backend.services.extractors.pl_statement import PLStatementExtractor
+from repos.ai_underwriting.backend.services.extractors.operating_statement import OperatingStatementExtractor
+from repos.ai_underwriting.backend.services.extractors.lease import LeaseExtractor
 
 from config.settings import (
     AZURE_OPENAI_ENDPOINT,
@@ -25,7 +34,7 @@ class DocumentProcessor:
     """Handles document processing with advanced text extraction and AI analysis."""
     
     def __init__(self):
-        """Initialize the document processor with Azure OpenAI and ChromaDB."""
+        """Initialize the document processor with Azure OpenAI, ChromaDB, and document extractors."""
         self.client = AzureOpenAI(
             api_key=AZURE_OPENAI_API_KEY,
             api_version="2023-12-01-preview",
@@ -41,7 +50,15 @@ class DocumentProcessor:
             metadata={"hnsw:space": "cosine"}
         )
         
-        logger.info("Document processor initialized with Azure OpenAI and ChromaDB")
+        # Initialize document extractors
+        self.extractors: List[BaseExtractor] = [
+            RentRollExtractor(),
+            PLStatementExtractor(),
+            OperatingStatementExtractor(),
+            LeaseExtractor()
+        ]
+        
+        logger.info("Document processor initialized with Azure OpenAI, ChromaDB, and extractors")
 
     def extract_text(self, pdf_file: BytesIO) -> str:
         """Extract text content from a PDF file."""
@@ -106,13 +123,34 @@ class DocumentProcessor:
             logger.error(f"Error creating embeddings: {str(e)}")
             raise
 
-    def analyze_document(self, pdf_file: BytesIO) -> Dict[str, Any]:
-        """Process and analyze a PDF document."""
+    def get_appropriate_extractor(self, content: str, filename: str) -> Optional[BaseExtractor]:
+        """Get the appropriate extractor for the document type."""
+        for extractor in self.extractors:
+            if extractor.can_handle(content, filename):
+                logger.info(f"Using {extractor.__class__.__name__} for {filename}")
+                return extractor
+        return None
+
+    def analyze_document(self, pdf_file: BytesIO, filename: str) -> Dict[str, Any]:
+        """Process and analyze a PDF document using specialized extractors and RAG capabilities."""
         try:
             # Extract text
             raw_text = self.extract_text(pdf_file)
             
-            # Create chunks
+            # Try to get specialized extractor
+            extractor = self.get_appropriate_extractor(raw_text, filename)
+            extracted_data = {}
+            
+            if extractor:
+                # Use specialized extractor
+                extracted_data = extractor.extract(raw_text)
+                validation_passed = extractor.validate()
+                confidence_scores = extractor.get_confidence_scores()
+                
+                if not validation_passed:
+                    logger.warning(f"Validation errors in {filename}: {extractor.validation_errors}")
+            
+            # Create chunks for RAG
             chunks = self.create_chunks(raw_text)
             chunk_texts = [chunk[0] for chunk in chunks]
             
@@ -132,38 +170,44 @@ class DocumentProcessor:
                 metadatas=[chunk[1] for chunk in chunks]
             )
             
-            # Extract key information using Azure OpenAI
-            system_prompt = """
-            You are a commercial real estate analyst. Extract the following information from the document:
-            - Property type and class
-            - Net Operating Income (NOI)
-            - Occupancy rate
-            - Property value
-            - Key financial metrics
-            - Risk factors
-            
-            Format the response as a JSON object.
-            """
-            
-            messages = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": raw_text[:4000]}  # First 4000 chars for initial analysis
-            ]
-            
-            response = self.client.chat.completions.create(
-                model=self.deployment_name,
-                messages=messages,
-                temperature=0.3,
-                max_tokens=1000
-            )
-            
-            analysis_result = response.choices[0].message.content
+            # If no specialized extractor or additional analysis needed
+            if not extractor:
+                # Extract key information using Azure OpenAI
+                system_prompt = """
+                You are a commercial real estate analyst. Extract the following information from the document:
+                - Property type and class
+                - Net Operating Income (NOI)
+                - Occupancy rate
+                - Property value
+                - Key financial metrics
+                - Risk factors
+                
+                Format the response as a JSON object.
+                """
+                
+                messages = [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": raw_text[:4000]}  # First 4000 chars for initial analysis
+                ]
+                
+                response = self.client.chat.completions.create(
+                    model=self.deployment_name,
+                    messages=messages,
+                    temperature=0.3,
+                    max_tokens=1000
+                )
+                
+                analysis_result = response.choices[0].message.content
+                extracted_data = json.loads(analysis_result)
             
             return {
                 "status": "success",
                 "text": raw_text,
                 "chunks": len(chunks),
-                "analysis": analysis_result,
+                "extracted_data": extracted_data,
+                "confidence_scores": confidence_scores if extractor else {},
+                "validation_errors": extractor.validation_errors if extractor else [],
+                "extractor_used": extractor.__class__.__name__ if extractor else None,
                 "processed_at": time.strftime("%Y-%m-%d %H:%M:%S")
             }
             

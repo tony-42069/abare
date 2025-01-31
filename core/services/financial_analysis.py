@@ -1,13 +1,16 @@
 """
-Enhanced financial analysis service that combines traditional calculations with AI insights.
+Enhanced financial analysis service that combines traditional calculations with AI insights
+and specialized document analysis.
 """
 import logging
 import re
 import json
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Union
 from datetime import datetime
+from decimal import Decimal
 
 from openai import AzureOpenAI
+from repos.ai_underwriting.backend.services.extractors.base import BaseExtractor
 from config.settings import (
     AZURE_OPENAI_ENDPOINT,
     AZURE_OPENAI_API_KEY,
@@ -27,11 +30,19 @@ class FinancialAnalysis:
             azure_endpoint=AZURE_OPENAI_ENDPOINT
         )
         self.deployment_name = AZURE_OPENAI_DEPLOYMENT_NAME
+        self.analysis_cache: Dict[str, Dict[str, Any]] = {}
         logger.info("Financial Analysis service initialized")
 
-    def extract_numbers(self, text: str) -> list:
-        """Extract all numbers from text."""
-        return [float(x.replace(',', '')) for x in re.findall(r'\$?(\d+(?:,\d{3})*(?:\.\d{2})?)', text)]
+    def extract_numbers(self, text: str) -> List[float]:
+        """Extract all numbers from text with improved accuracy."""
+        numbers = []
+        for match in re.finditer(r'\$?(\d+(?:,\d{3})*(?:\.\d{2})?)\b', text):
+            try:
+                num_str = match.group(1).replace(',', '')
+                numbers.append(float(num_str))
+            except (ValueError, AttributeError):
+                continue
+        return numbers
 
     def find_metric(self, text: str, patterns: List[str]) -> Optional[float]:
         """Extract a metric using multiple patterns."""
@@ -59,21 +70,31 @@ class FinancialAnalysis:
         ]
         return self.find_metric(text, patterns)
 
-    def calculate_metrics(self, noi: float, property_value: float, 
+    def calculate_metrics(self, 
+                        noi: float, 
+                        property_value: float,
+                        square_footage: Optional[float] = None,
                         loan_amount: Optional[float] = None,
-                        debt_service: Optional[float] = None) -> Dict[str, float]:
-        """Calculate key financial metrics."""
+                        debt_service: Optional[float] = None,
+                        total_revenue: Optional[float] = None,
+                        total_expenses: Optional[float] = None) -> Dict[str, float]:
+        """Calculate comprehensive financial metrics."""
         metrics = {
-            "cap_rate": (noi / property_value * 100) if property_value else 0.0,
-            "price_per_sf": 0.0,  # Will be updated if square footage is available
-            "cash_on_cash": 0.0,  # Will be calculated if we have the necessary inputs
+            "cap_rate": round((noi / property_value * 100), 2) if property_value else 0.0,
+            "price_per_sf": round((property_value / square_footage), 2) if square_footage else 0.0,
+            "noi_per_sf": round((noi / square_footage), 2) if square_footage else 0.0,
         }
         
         if loan_amount:
-            metrics["ltv"] = (loan_amount / property_value * 100)
+            metrics["ltv"] = round((loan_amount / property_value * 100), 2)
+            metrics["equity_required"] = round(property_value - loan_amount, 2)
         
         if debt_service:
-            metrics["dscr"] = noi / debt_service
+            metrics["dscr"] = round(noi / debt_service, 2)
+        
+        if total_revenue and total_expenses:
+            metrics["expense_ratio"] = round((total_expenses / total_revenue * 100), 2)
+            metrics["operating_margin"] = round((noi / total_revenue * 100), 2)
         
         return metrics
 
@@ -112,46 +133,86 @@ class FinancialAnalysis:
                 "details": str(e)
             }
 
-    async def analyze_property(self, doc_text: str, doc_analysis: Dict[str, Any]) -> Dict[str, Any]:
-        """Perform comprehensive financial analysis combining traditional metrics and AI insights."""
+    def combine_extracted_data(self, extracted_data: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Combine data from multiple document extractions."""
+        combined = {
+            "noi": None,
+            "property_value": None,
+            "square_footage": None,
+            "occupancy_rate": None,
+            "total_revenue": None,
+            "total_expenses": None,
+            "loan_amount": None,
+            "debt_service": None,
+            "property_type": None,
+            "property_class": None
+        }
+        
+        confidence_scores = {}
+        
+        for data in extracted_data:
+            for key, value in data.items():
+                if key in combined:
+                    if combined[key] is None or (isinstance(value, (int, float)) and value > combined[key]):
+                        combined[key] = value
+                        confidence_scores[key] = data.get("confidence_scores", {}).get(key, 0.0)
+        
+        return {
+            "data": combined,
+            "confidence_scores": confidence_scores
+        }
+
+    async def analyze_property(self, 
+                             documents: List[Dict[str, Any]], 
+                             extracted_data: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Perform comprehensive financial analysis using multiple document sources."""
         try:
-            # Extract basic metrics
-            noi = self.find_noi(doc_text)
-            occupancy = self.find_occupancy(doc_text)
+            # Combine extracted data from all documents
+            combined_data = self.combine_extracted_data(extracted_data)
+            data = combined_data["data"]
             
-            # Try to get property value and loan details from the AI analysis
-            try:
-                analysis_data = json.loads(doc_analysis.get('analysis', '{}'))
-                property_value = analysis_data.get('property_value')
-                loan_amount = analysis_data.get('loan_amount')
-                debt_service = analysis_data.get('debt_service')
-            except (json.JSONDecodeError, AttributeError):
-                property_value = None
-                loan_amount = None
-                debt_service = None
-            
-            # Calculate traditional metrics
+            # Calculate comprehensive metrics
             metrics = self.calculate_metrics(
-                noi=noi if noi else 0,
-                property_value=property_value if property_value else 0,
-                loan_amount=loan_amount,
-                debt_service=debt_service
+                noi=data["noi"] if data["noi"] else 0,
+                property_value=data["property_value"] if data["property_value"] else 0,
+                square_footage=data["square_footage"],
+                loan_amount=data["loan_amount"],
+                debt_service=data["debt_service"],
+                total_revenue=data["total_revenue"],
+                total_expenses=data["total_expenses"]
             )
             
-            # Get AI insights
-            insights = await self.get_ai_insights(doc_text[:8000])  # Use first 8000 chars for insights
+            # Combine all document text for AI insights
+            combined_text = "\n".join([doc.get("text", "") for doc in documents])
+            insights = await self.get_ai_insights(combined_text[:12000])  # Use first 12000 chars for insights
+            
+            # Market analysis using external data (placeholder)
+            market_analysis = {
+                "market_cap_rate": 5.5,  # Example value
+                "market_occupancy": 92.0,
+                "market_rent_growth": 3.0
+            }
             
             return {
                 "status": "success",
                 "timestamp": datetime.now().isoformat(),
-                "basic_metrics": {
-                    "noi": noi,
-                    "occupancy_rate": occupancy,
-                    "property_value": property_value
+                "property_info": {
+                    "type": data["property_type"],
+                    "class": data["property_class"],
+                    "square_footage": data["square_footage"]
                 },
-                "financial_metrics": metrics,
+                "financial_metrics": {
+                    "basic": {
+                        "noi": data["noi"],
+                        "occupancy_rate": data["occupancy_rate"],
+                        "property_value": data["property_value"]
+                    },
+                    "calculated": metrics
+                },
+                "market_analysis": market_analysis,
                 "ai_insights": insights,
-                "confidence_score": 0.85  # Example confidence score
+                "confidence_scores": combined_data["confidence_scores"],
+                "data_completeness": sum(1 for v in data.values() if v is not None) / len(data)
             }
             
         except Exception as e:
