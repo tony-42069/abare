@@ -3,12 +3,30 @@ import {
   InvestmentAnalysis,
   RiskAnalysis,
   PortfolioAnalysis,
+  CreditRiskFactors,
+  CreditRiskWeights,
+  CreditRiskCalculation,
+  TenantRiskProfile,
+  PropertyCreditAnalysis,
   isFinancialMetrics,
   isInvestmentAnalysis,
   isRiskAnalysis,
-  isPortfolioAnalysis
+  isPortfolioAnalysis,
+  isCreditRiskFactors,
+  isCreditRiskWeights,
+  isCreditRiskCalculation,
+  isTenantRiskProfile,
+  isPropertyCreditAnalysis
 } from './types';
-import { PropertyType, RiskProfile } from '@abare/core';
+import { 
+  PropertyType, 
+  RiskProfile,
+  CreditRiskLevel,
+  TenantProfile,
+  LeaseRisk,
+  TenantConcentration,
+  CreditRiskAnalysis
+} from '@abare/core';
 import {
   MarketSpread,
   RateEnvironment,
@@ -16,6 +34,17 @@ import {
   analyzeSpread,
   HistoricalData
 } from '@abare/market-data';
+
+// Credit Risk Analysis Functions
+import {
+  calculateTenantRiskProfile,
+  calculatePropertyCreditAnalysis
+} from './credit-risk';
+
+export {
+  calculateTenantRiskProfile,
+  calculatePropertyCreditAnalysis
+};
 
 // Financial Analysis Functions
 export function calculateFinancialMetrics(
@@ -92,7 +121,26 @@ export function analyzeRisk(
   marketData: RateEnvironment,
   locationScore: number,
   propertyAge: number,
-  tenantData: any
+  tenantData: {
+    profile: TenantProfile;
+    lease: {
+      termRemaining: number;
+      monthlyRent: number;
+      squareFeet: number;
+      escalations: number;
+      securityDeposit: number;
+    };
+    marketContext: {
+      marketRent: number;
+      industryGrowth: number;
+      marketShare: number;
+    };
+    propertyMetrics: {
+      totalRent: number;
+      totalSqFt: number;
+      industryExposure: number;
+    };
+  }
 ): RiskAnalysis {
   const marketRiskAssessment = assessMarketRisk(marketData);
   
@@ -194,14 +242,40 @@ function calculateMarketLiquidityScore(marketData: RateEnvironment): number {
 }
 
 // Risk Analysis Helper Functions
-function analyzeTenantRiskProfile(tenantData: any) {
+function analyzeTenantRiskProfile(tenantData: {
+  profile: TenantProfile;
+  lease: {
+    termRemaining: number;
+    monthlyRent: number;
+    squareFeet: number;
+    escalations: number;
+    securityDeposit: number;
+  };
+  marketContext: {
+    marketRent: number;
+    industryGrowth: number;
+    marketShare: number;
+  };
+  propertyMetrics: {
+    totalRent: number;
+    totalSqFt: number;
+    industryExposure: number;
+  };
+}) {
+  const tenantRiskProfile = calculateTenantRiskProfile(
+    tenantData.profile,
+    tenantData.lease,
+    tenantData.marketContext,
+    tenantData.propertyMetrics
+  );
+
   return {
-    score: 0.5, // Placeholder - implement actual tenant risk scoring
+    score: 1 - (tenantRiskProfile.creditRisk.adjustedScore / 100),
     factors: {
-      creditQuality: 0.7,
-      tenantDiversity: 0.6,
-      leaseTerms: 0.8,
-      rolloverExposure: 0.4
+      creditQuality: tenantRiskProfile.creditRisk.factors.financialStrength,
+      tenantDiversity: 1 - (tenantRiskProfile.concentration.percentOfRevenue / 100),
+      leaseTerms: Math.min(1, tenantRiskProfile.leaseRisk.leaseTermRemaining / 120),
+      rolloverExposure: 1 - tenantRiskProfile.leaseRisk.defaultProbability
     }
   };
 }
@@ -401,28 +475,66 @@ function calculatePairwiseCorrelation(p1: InvestmentAnalysis, p2: InvestmentAnal
   return Math.min(1, Math.max(-1, correlation));
 }
 
+interface RiskScoreFactors {
+  score: number;
+  factors: Record<string, number>;
+}
+
 function generateRiskRecommendations(
-  marketRisk: any,
-  tenantRisk: any,
-  locationRisk: any,
-  propertyConditionRisk: any
+  marketRisk: RiskScoreFactors,
+  tenantRisk: {
+    score: number;
+    factors: {
+      creditQuality: number;
+      tenantDiversity: number;
+      leaseTerms: number;
+      rolloverExposure: number;
+    };
+  },
+  locationRisk: RiskScoreFactors,
+  propertyConditionRisk: RiskScoreFactors
 ): string[] {
   const recommendations: string[] = [];
   
+  // Market Risk Recommendations
   if (marketRisk.score > 0.6) {
     recommendations.push('Consider market hedging strategies');
+    if (marketRisk.factors.marketLiquidity > 0.7) {
+      recommendations.push('Monitor market liquidity conditions closely');
+    }
   }
   
+  // Tenant Risk Recommendations
   if (tenantRisk.score > 0.6) {
-    recommendations.push('Implement stronger tenant screening');
+    recommendations.push('Implement stronger tenant screening procedures');
+    
+    if (tenantRisk.factors.creditQuality > 0.7) {
+      recommendations.push('Review tenant financial statements more frequently');
+    }
+    
+    if (tenantRisk.factors.tenantDiversity < 0.3) {
+      recommendations.push('Consider diversifying tenant mix to reduce concentration risk');
+    }
+    
+    if (tenantRisk.factors.rolloverExposure > 0.7) {
+      recommendations.push('Develop proactive lease renewal strategy');
+    }
   }
   
+  // Location Risk Recommendations
   if (locationRisk.score > 0.6) {
     recommendations.push('Evaluate potential infrastructure improvements');
+    if (locationRisk.factors.accessibility < 0.4) {
+      recommendations.push('Consider transportation access improvements');
+    }
   }
   
+  // Property Condition Risk Recommendations
   if (propertyConditionRisk.score > 0.6) {
     recommendations.push('Develop capital improvement plan');
+    if (propertyConditionRisk.factors.sustainability < 0.4) {
+      recommendations.push('Evaluate energy efficiency upgrade opportunities');
+    }
   }
   
   return recommendations;
