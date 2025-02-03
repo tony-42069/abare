@@ -1,32 +1,102 @@
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-venv/
-ENV/
-.env
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-
 # Dependencies
 node_modules/
+.pnpm-store/
+.npm/
+venv/
+__pycache__/
+*.pyc
+
+# Build outputs
 dist/
 build/
+.next/
+out/
+*.tsbuildinfo
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+.secrets/
+credentials/
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Logs and debugging
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Testing and coverage
+coverage/
+.nyc_output/
+.pytest_cache/
+htmlcov/
+
+# Proprietary code and sensitive data
+core/services/algorithms/
+core/models/proprietary/
+core/api/internal/
+abare-platform/packages/analytics/src/proprietary/
+abare-platform/packages/market-data/src/proprietary/
+docs/internal/
+tests/proprietary/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+.turbo/
+
+# Backup files
+*~
+*.bak
+*.backup
+*-backup
+
+# Platform specific
+.vercel
+.netlify
+.railway
+
+# Local development
+*.local
+local/
+dev-data/
+
+# Documentation drafts and internal notes
+docs/drafts/
+docs/internal/
+*.draft.md
+NOTES.md
 
 # Database
-*.sqlite3
+*.sqlite
 *.db
+mongodb/
+data/
 
-# Logs
-*.log
-logs/
+# Deployment and infrastructure
+terraform.tfstate*
+.terraform/
+kubernetes/secrets/
+docker-compose.override.yml
 
-# OS
-.DS_Store
-Thumbs.db
+# Backup directories
+*-backup/
+backup/
+.backup/
+
+# Generated files
+generated/
+auto-generated/
+*.generated.*
