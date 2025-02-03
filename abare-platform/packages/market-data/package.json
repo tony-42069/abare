@@ -1,0 +1,25 @@
+{
+  "name": "@abare/market-data",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "clean": "rmdir /s /q dist",
+    "lint": "eslint \"src/**/*.ts\""
+  },
+  "dependencies": {
+    "@abare/core": "workspace:*",
+    "date-fns": "2.30.0"
+  },
+  "devDependencies": {
+    "@types/node": "20.11.16",
+    "@types/date-fns": "2.6.0",
+    "typescript": "5.3.3",
+    "@abare/typescript-config": "workspace:*",
+    "@abare/eslint-config": "workspace:*",
+    "eslint": "8.56.0"
+  }
+}

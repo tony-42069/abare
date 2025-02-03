@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "display": "Root",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@abare/*": ["packages/*/src"]
+    },
+    "moduleResolution": "node",
+    "module": "ESNext",
+    "target": "ES2021",
+    "lib": ["ES2021"],
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "strict": true
+  },
+  "include": ["packages/*/src/**/*"],
+  "exclude": ["node_modules"],
+  "references": [
+    {
+      "path": "packages/core"
+    },
+    {
+      "path": "packages/analytics"
+    },
+    {
+      "path": "packages/market-data"
+    }
+  ]
+}
