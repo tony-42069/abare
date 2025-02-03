@@ -1,102 +1,76 @@
-import Image, { type ImageProps } from "next/image";
-import { Button } from "@repo/ui/button";
-import styles from "./page.module.css";
+import { Container, Title, SimpleGrid, Card, Text, Group } from '@mantine/core';
+import { IconBuilding, IconFiles, IconChartBar, IconChartLine } from '@tabler/icons-react';
 
-type Props = Omit<ImageProps, "src"> & {
-  srcLight: string;
-  srcDark: string;
-};
-
-const ThemeImage = (props: Props) => {
-  const { srcLight, srcDark, ...rest } = props;
+export default function HomePage() {
+  const stats = [
+    { 
+      title: 'Properties',
+      value: '15',
+      icon: IconBuilding,
+      href: '/properties'
+    },
+    { 
+      title: 'Documents',
+      value: '156',
+      icon: IconFiles,
+      href: '/documents'
+    },
+    { 
+      title: 'Analyses',
+      value: '42',
+      icon: IconChartBar,
+      href: '/analysis'
+    },
+    { 
+      title: 'Market Data',
+      value: 'Live',
+      icon: IconChartLine,
+      href: '/market'
+    }
+  ];
 
   return (
-    <>
-      <Image {...rest} src={srcLight} className="imgLight" />
-      <Image {...rest} src={srcDark} className="imgDark" />
-    </>
-  );
-};
-
-export default function Home() {
-  return (
-    <div className={styles.page}>
-      <main className={styles.main}>
-        <ThemeImage
-          className={styles.logo}
-          srcLight="turborepo-dark.svg"
-          srcDark="turborepo-light.svg"
-          alt="Turborepo logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol>
-          <li>
-            Get started by editing <code>apps/web/app/page.tsx</code>
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
-
-        <div className={styles.ctas}>
-          <a
-            className={styles.primary}
-            href="https://vercel.com/new/clone?demo-description=Learn+to+implement+a+monorepo+with+a+two+Next.js+sites+that+has+installed+three+local+packages.&demo-image=%2F%2Fimages.ctfassets.net%2Fe5382hct74si%2F4K8ZISWAzJ8X1504ca0zmC%2F0b21a1c6246add355e55816278ef54bc%2FBasic.png&demo-title=Monorepo+with+Turborepo&demo-url=https%3A%2F%2Fexamples-basic-web.vercel.sh%2F&from=templates&project-name=Monorepo+with+Turborepo&repository-name=monorepo-turborepo&repository-url=https%3A%2F%2Fgithub.com%2Fvercel%2Fturborepo%2Ftree%2Fmain%2Fexamples%2Fbasic&root-directory=apps%2Fdocs&skippable-integrations=1&teamSlug=vercel&utm_source=create-turbo"
-            target="_blank"
-            rel="noopener noreferrer"
+    <Container size="xl" py="xl">
+      <Title order={1} mb="xl">Dashboard</Title>
+      
+      <SimpleGrid cols={{ base: 1, sm: 2, md: 4 }}>
+        {stats.map((stat) => (
+          <Card 
+            key={stat.title}
+            shadow="sm"
+            padding="lg"
+            radius="md"
+            withBorder
+            component="a"
+            href={stat.href}
+            style={{ textDecoration: 'none' }}
           >
-            <Image
-              className={styles.logo}
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            href="https://turbo.build/repo/docs?utm_source"
-            target="_blank"
-            rel="noopener noreferrer"
-            className={styles.secondary}
-          >
-            Read our docs
-          </a>
-        </div>
-        <Button appName="web" className={styles.secondary}>
-          Open alert
-        </Button>
-      </main>
-      <footer className={styles.footer}>
-        <a
-          href="https://vercel.com/templates?search=turborepo&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          href="https://turbo.build?utm_source=create-turbo"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to turbo.build →
-        </a>
-      </footer>
-    </div>
+            <Group>
+              <stat.icon size={24} />
+              <div>
+                <Text size="xs" c="dimmed" tt="uppercase" fw={700}>
+                  {stat.title}
+                </Text>
+                <Text size="xl" fw={700}>
+                  {stat.value}
+                </Text>
+              </div>
+            </Group>
+          </Card>
+        ))}
+      </SimpleGrid>
+
+      <SimpleGrid cols={{ base: 1, md: 2 }} mt="xl">
+        <Card shadow="sm" padding="lg" radius="md" withBorder>
+          <Title order={3} mb="md">Recent Properties</Title>
+          <Text c="dimmed">No properties added yet</Text>
+        </Card>
+
+        <Card shadow="sm" padding="lg" radius="md" withBorder>
+          <Title order={3} mb="md">Recent Documents</Title>
+          <Text c="dimmed">No documents uploaded yet</Text>
+        </Card>
+      </SimpleGrid>
+    </Container>
   );
 }

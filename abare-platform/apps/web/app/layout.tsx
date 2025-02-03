@@ -1,10 +1,6 @@
-import '@mantine/core/styles.css';
-import { MantineProvider, ColorSchemeScript } from '@mantine/core';
-
-export const metadata = {
-  title: 'ABARE Platform',
-  description: 'AI-Based Analysis of Real Estate',
-};
+import React from 'react';
+import RootLayoutServer from './layout.server';
+import RootLayoutClient from './layout.client';
 
 export default function RootLayout({
   children,
@@ -12,15 +8,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <head>
-        <ColorSchemeScript />
-      </head>
-      <body>
-        <MantineProvider>
-          {children}
-        </MantineProvider>
-      </body>
-    </html>
+    <RootLayoutServer>
+      <RootLayoutClient>{children}</RootLayoutClient>
+    </RootLayoutServer>
   );
 }
