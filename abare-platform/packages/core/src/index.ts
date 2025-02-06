@@ -1,33 +1,44 @@
-export * from './api/models';
-export * from './api/services';
-
-export { ApiClient } from './api/core/ApiClient';
-export { ApiError } from './api/core/ApiError';
-export { CancelablePromise } from './api/core/CancelablePromise';
-export { OpenAPI } from './api/core/OpenAPI';
-export { RequestOptions } from './api/core/RequestOptions';
-
-// Re-export common types
+// Re-export models and types
 export type {
-  Property,
-  Tenant,
-  Document,
-  Analysis,
+  ApiResponse,
+  ErrorResponse,
+  PaginatedResponse,
 } from './api/models';
 
-// Re-export service types
+// Re-export services and their types
 export type {
-  PropertyService,
-  DocumentService,
-  AnalysisService,
-} from './api/services';
+  Document,
+  DocumentTaskStatus,
+} from './api/services/DocumentService';
 
-// Configure API client
-import { OpenAPI } from './api/core/OpenAPI';
+export type {
+  Property,
+  CreatePropertyInput,
+  UpdatePropertyInput,
+} from './api/services/PropertyService';
 
-export const configureApi = (baseUrl: string, token?: string) => {
-  OpenAPI.BASE = baseUrl;
-  if (token) {
-    OpenAPI.TOKEN = token;
-  }
+export type {
+  Analysis,
+  CreateAnalysisInput,
+  UpdateAnalysisInput,
+} from './api/services/AnalysisService';
+
+// Re-export service implementations
+export { DocumentService } from './api/services/DocumentService';
+export { PropertyService } from './api/services/PropertyService';
+export { AnalysisService } from './api/services/AnalysisService';
+
+// Re-export core client types and implementation
+export type { RequestOptions } from './api/client/RequestOptions';
+export { ApiClient } from './api/client/ApiClient';
+
+// Create and export default API client instance
+import { ApiClient } from './api/client/ApiClient';
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+export const createApiClient = (baseUrl: string = API_BASE_URL, headers: Record<string, string> = {}) => {
+  return new ApiClient(baseUrl, headers);
 };
+
+export default createApiClient;

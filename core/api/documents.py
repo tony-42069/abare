@@ -2,30 +2,41 @@
 API router for document-related endpoints with enhanced processing capabilities.
 """
 import os
-from typing import List, Optional
-from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Query
-from pymongo.database import Database
+from typing import List, Optional, Dict, Any, TYPE_CHECKING
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends, Query, BackgroundTasks, Response, status
+from motor.motor_asyncio import AsyncIOMotorDatabase
 from fastapi import Request
 import logging
 from bson import ObjectId
+import uuid
+from datetime import datetime
+
+if TYPE_CHECKING:
+    from core.services.task_queue import TaskQueue
 
 from core.models.document import Document, DocumentAnalysis, ExtractorResult
 from core.services.document_processor import DocumentProcessor
+from core.services.task_queue import TaskQueue
 from config.settings import UPLOAD_DIR
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-async def get_database(request: Request) -> Database:
+async def get_database(request: Request) -> "AsyncIOMotorDatabase":
     """Get MongoDB database instance."""
     return request.app.mongodb
+
+async def get_task_queue(request: Request) -> "TaskQueue":
+    """Get task queue instance."""
+    return request.app.task_queue
 
 @router.post("/upload", response_model=Document)
 async def upload_document(
     file: UploadFile = File(...),
     property_id: Optional[str] = Query(None, description="Associated property ID"),
     document_type: Optional[str] = Query(None, description="Document type (e.g., rent_roll, operating_statement)"),
-    db: Database = Depends(get_database)
+    db: "AsyncIOMotorDatabase" = Depends(get_database),
+    task_queue: "TaskQueue" = Depends(get_task_queue)
 ):
     """
     Upload and process a new document with specialized extraction.
@@ -61,64 +72,83 @@ async def upload_document(
         result = db.documents.insert_one(document.dict(by_alias=True))
         document.id = str(result.inserted_id)
         
-        # Process document asynchronously
-        # Note: In production, this should be handled by a background task queue
-        try:
-            # Process with enhanced document processor
-            analysis_result = await processor.analyze_document(content, file.filename)
-            
-            # Prepare update data with enhanced analysis results
-            update_data = {
-                "status": "completed",
-                "document_type": document_type or analysis_result.get("document_type"),
-                "property_id": property_id,
-                "analysis": DocumentAnalysis(
-                    raw_text=analysis_result["text"],
-                    chunks=analysis_result.get("chunks", []),
-                    extracted_data=analysis_result.get("extracted_data", {}),
-                    extractor_results=[
-                        ExtractorResult(
-                            extractor_name=analysis_result["extractor_used"],
-                            extracted_data=analysis_result["extracted_data"],
-                            confidence_scores=analysis_result["confidence_scores"],
-                            validation_errors=analysis_result["validation_errors"]
-                        )
-                    ] if analysis_result.get("extractor_used") else [],
-                    ai_insights=analysis_result.get("ai_insights", {}),
-                    confidence_scores=analysis_result.get("confidence_scores", {}),
-                    validation_errors=analysis_result.get("validation_errors", [])
-                ),
-                "processing_status": {
-                    "ocr": "completed",
-                    "extraction": "completed" if analysis_result.get("extractor_used") else "skipped",
-                    "analysis": "completed"
-                }
-            }
-            
-            # Update metadata with processing details
-            update_data["metadata"] = {
-                "processor_version": "2.0.0",
-                "processing_time": analysis_result.get("processing_time", 0),
-                "extractor_used": analysis_result.get("extractor_used"),
-                "confidence_score": analysis_result.get("confidence_scores", {}).get("overall", 0.0)
-            }
-            
-        except Exception as e:
-            logger.error(f"Error processing document: {str(e)}")
-            update_data = {
-                "status": "error",
-                "error_message": str(e),
-                "processing_status": {
-                    "ocr": "error",
-                    "extraction": "error",
-                    "analysis": "error"
-                }
-            }
+        # Create task for document processing
+        task_id = str(uuid.uuid4())
+        processor = DocumentProcessor()
         
-        # Update document record
-        db.documents.update_one(
+        async def process_document():
+            try:
+                # Process with enhanced document processor
+                analysis_result = await processor.analyze_document(content, file.filename)
+                
+                # Prepare update data with enhanced analysis results
+                update_data = {
+                    "status": "completed",
+                    "document_type": document_type or analysis_result.get("document_type"),
+                    "property_id": property_id,
+                    "analysis": DocumentAnalysis(
+                        raw_text=analysis_result["text"],
+                        chunks=analysis_result.get("chunks", []),
+                        extracted_data=analysis_result.get("extracted_data", {}),
+                        extractor_results=[
+                            ExtractorResult(
+                                extractor_name=analysis_result["extractor_used"],
+                                extracted_data=analysis_result["extracted_data"],
+                                confidence_scores=analysis_result["confidence_scores"],
+                                validation_errors=analysis_result["validation_errors"]
+                            )
+                        ] if analysis_result.get("extractor_used") else [],
+                        ai_insights=analysis_result.get("ai_insights", {}),
+                        confidence_scores=analysis_result.get("confidence_scores", {}),
+                        validation_errors=analysis_result.get("validation_errors", [])
+                    ),
+                    "processing_status": {
+                        "ocr": "completed",
+                        "extraction": "completed" if analysis_result.get("extractor_used") else "skipped",
+                        "analysis": "completed"
+                    },
+                    "metadata": {
+                        "processor_version": "2.0.0",
+                        "processing_time": analysis_result.get("processing_time", 0),
+                        "extractor_used": analysis_result.get("extractor_used"),
+                        "confidence_score": analysis_result.get("confidence_scores", {}).get("overall", 0.0)
+                    }
+                }
+                
+                # Update document record
+                await db.documents.update_one(
+                    {"_id": result.inserted_id},
+                    {"$set": update_data}
+                )
+                
+                return update_data
+                
+            except Exception as e:
+                logger.error(f"Error processing document: {str(e)}")
+                error_data = {
+                    "status": "error",
+                    "error_message": str(e),
+                    "processing_status": {
+                        "ocr": "error",
+                        "extraction": "error",
+                        "analysis": "error"
+                    }
+                }
+                
+                await db.documents.update_one(
+                    {"_id": result.inserted_id},
+                    {"$set": error_data}
+                )
+                
+                raise
+        
+        # Add processing task to queue
+        await task_queue.add_task(task_id, process_document())
+        
+        # Update document with task ID
+        await db.documents.update_one(
             {"_id": result.inserted_id},
-            {"$set": update_data}
+            {"$set": {"task_id": task_id}}
         )
         
         return document
@@ -130,16 +160,62 @@ async def upload_document(
             detail=f"Error uploading document: {str(e)}"
         )
 
+# Add new endpoint for task status
+@router.get("/{document_id}/task", response_model=Dict[str, Any])
+async def get_document_task_status(
+    document_id: str,
+    db: "AsyncIOMotorDatabase" = Depends(get_database),
+    task_queue: "TaskQueue" = Depends(get_task_queue)
+):
+    """Get the processing task status for a document."""
+    try:
+        # Get document
+        document = await db.documents.find_one({"_id": ObjectId(document_id)})
+        if not document:
+            raise HTTPException(status_code=404, detail="Document not found")
+        
+        # Check if document has a task
+        if "task_id" not in document:
+            return {
+                "status": document.get("status", "unknown"),
+                "processing_status": document.get("processing_status", {}),
+                "has_task": False
+            }
+        
+        # Get task status
+        task_status = await task_queue.get_task_status(document["task_id"])
+        
+        return {
+            "status": document.get("status", "unknown"),
+            "processing_status": document.get("processing_status", {}),
+            "has_task": True,
+            "task": {
+                "id": document["task_id"],
+                "status": task_status["status"],
+                "created_at": task_status["created_at"],
+                "updated_at": task_status["updated_at"],
+                "error": task_status.get("error")
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting task status: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error getting task status: {str(e)}"
+        )
+
 @router.get("/{document_id}", response_model=Document)
 async def get_document(
     document_id: str,
-    db: Database = Depends(get_database)
+    db: "AsyncIOMotorDatabase" = Depends(get_database),
+    task_queue: "TaskQueue" = Depends(get_task_queue)
 ):
     """Get document by ID."""
     from bson import ObjectId
     
     try:
-        document = db.documents.find_one({"_id": ObjectId(document_id)})
+        document = await db.documents.find_one({"_id": ObjectId(document_id)})
         if not document:
             raise HTTPException(status_code=404, detail="Document not found")
         return document
@@ -158,7 +234,7 @@ async def list_documents(
     property_id: Optional[str] = None,
     document_type: Optional[str] = None,
     status: Optional[str] = None,
-    db: Database = Depends(get_database)
+    db: "AsyncIOMotorDatabase" = Depends(get_database)
 ):
     """
     List documents with filtering and pagination.
@@ -181,7 +257,7 @@ async def list_documents(
             query["status"] = status
             
         # Execute query with filters
-        documents = list(db.documents.find(query).skip(skip).limit(limit))
+        documents = await db.documents.find(query).skip(skip).limit(limit).to_list(length=limit)
         return documents
         
     except Exception as e:
@@ -192,15 +268,139 @@ async def list_documents(
         )
 
 
+@router.post("/{document_id}/reprocess")
+async def reprocess_document(
+    document_id: str,
+    db: "AsyncIOMotorDatabase" = Depends(get_database),
+    task_queue: "TaskQueue" = Depends(get_task_queue)
+):
+    """Reprocess a document that failed or needs updating."""
+    try:
+        # Get document
+        document = await db.documents.find_one({"_id": ObjectId(document_id)})
+        if not document:
+            raise HTTPException(status_code=404, detail="Document not found")
+        
+        # Cancel existing task if any
+        if "task_id" in document:
+            try:
+                await task_queue.cancel_task(document["task_id"])
+            except ValueError:
+                pass  # Task might not exist anymore
+        
+        # Create new processing task
+        task_id = str(uuid.uuid4())
+        processor = DocumentProcessor()
+        
+        async def reprocess():
+            try:
+                # Read file content
+                with open(document["file_path"], "rb") as f:
+                    content = f.read()
+                
+                # Process document
+                analysis_result = await processor.analyze_document(content, document["filename"])
+                
+                # Prepare update data
+                update_data = {
+                    "status": "completed",
+                    "document_type": document.get("document_type") or analysis_result.get("document_type"),
+                    "property_id": document.get("property_id"),
+                    "analysis": DocumentAnalysis(
+                        raw_text=analysis_result["text"],
+                        chunks=analysis_result.get("chunks", []),
+                        extracted_data=analysis_result.get("extracted_data", {}),
+                        extractor_results=[
+                            ExtractorResult(
+                                extractor_name=analysis_result["extractor_used"],
+                                extracted_data=analysis_result["extracted_data"],
+                                confidence_scores=analysis_result["confidence_scores"],
+                                validation_errors=analysis_result["validation_errors"]
+                            )
+                        ] if analysis_result.get("extractor_used") else [],
+                        ai_insights=analysis_result.get("ai_insights", {}),
+                        confidence_scores=analysis_result.get("confidence_scores", {}),
+                        validation_errors=analysis_result.get("validation_errors", [])
+                    ),
+                    "processing_status": {
+                        "ocr": "completed",
+                        "extraction": "completed" if analysis_result.get("extractor_used") else "skipped",
+                        "analysis": "completed"
+                    },
+                    "metadata": {
+                        "processor_version": "2.0.0",
+                        "processing_time": analysis_result.get("processing_time", 0),
+                        "extractor_used": analysis_result.get("extractor_used"),
+                        "confidence_score": analysis_result.get("confidence_scores", {}).get("overall", 0.0),
+                        "reprocessed_at": datetime.utcnow()
+                    }
+                }
+                
+                # Update document
+                await db.documents.update_one(
+                    {"_id": ObjectId(document_id)},
+                    {"$set": update_data}
+                )
+                
+                return update_data
+                
+            except Exception as e:
+                logger.error(f"Error reprocessing document: {str(e)}")
+                error_data = {
+                    "status": "error",
+                    "error_message": str(e),
+                    "processing_status": {
+                        "ocr": "error",
+                        "extraction": "error",
+                        "analysis": "error"
+                    }
+                }
+                
+                await db.documents.update_one(
+                    {"_id": ObjectId(document_id)},
+                    {"$set": error_data}
+                )
+                
+                raise
+        
+        # Add reprocessing task to queue
+        await task_queue.add_task(task_id, reprocess())
+        
+        # Update document with new task ID
+        await db.documents.update_one(
+            {"_id": ObjectId(document_id)},
+            {
+                "$set": {
+                    "task_id": task_id,
+                    "status": "processing",
+                    "processing_status": {
+                        "ocr": "pending",
+                        "extraction": "pending",
+                        "analysis": "pending"
+                    }
+                }
+            }
+        )
+        
+        return Response(status_code=status.HTTP_202_ACCEPTED)
+        
+    except Exception as e:
+        logger.error(f"Error initiating document reprocessing: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error initiating document reprocessing: {str(e)}"
+        )
+
 @router.delete("/{document_id}")
 async def delete_document(
     document_id: str,
-    db: Database = Depends(get_database)
+    db: "AsyncIOMotorDatabase" = Depends(get_database),
+    task_queue: "TaskQueue" = Depends(get_task_queue)
 ):
     """Delete a document by ID."""
     try:
         # Get document to check file path
-        document = db.documents.find_one({"_id": ObjectId(document_id)})
+        document = await db.documents.find_one({"_id": ObjectId(document_id)})
         if not document:
             raise HTTPException(status_code=404, detail="Document not found")
         
@@ -213,7 +413,11 @@ async def delete_document(
                 # Continue with document deletion even if file deletion fails
         
         # Delete document record
-        result = db.documents.delete_one({"_id": ObjectId(document_id)})
+        # Cancel any running task
+        if "task_id" in document:
+            await task_queue.cancel_task(document["task_id"])
+        
+        result = await db.documents.delete_one({"_id": ObjectId(document_id)})
         if result.deleted_count == 0:
             raise HTTPException(status_code=404, detail="Document not found")
         

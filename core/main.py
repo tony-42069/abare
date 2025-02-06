@@ -4,7 +4,8 @@ Main FastAPI application for the ABARE platform.
 import logging
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pymongo import MongoClient
+from motor.motor_asyncio import AsyncIOMotorClient
+import asyncio
 
 from config.settings import (
     PROJECT_NAME,
@@ -13,6 +14,7 @@ from config.settings import (
     MONGODB_URL,
     MONGODB_DB_NAME
 )
+from core.services.task_queue import TaskQueue
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -35,33 +37,58 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# MongoDB connection
+# MongoDB and Task Queue initialization
 @app.on_event("startup")
-async def startup_db_client():
+async def startup_services():
     try:
-        app.mongodb_client = MongoClient(MONGODB_URL)
+        # Initialize MongoDB connection
+        app.mongodb_client = AsyncIOMotorClient(MONGODB_URL)
         app.mongodb = app.mongodb_client[MONGODB_DB_NAME]
-        logger.info("Connected to MongoDB")
+        
+        # Initialize task queue
+        app.task_queue = TaskQueue(app.mongodb)
+        
+        # Test MongoDB connection
+        await app.mongodb.command("ping")
+        logger.info("Connected to MongoDB and initialized task queue")
+        
     except Exception as e:
-        logger.error(f"Failed to connect to MongoDB: {str(e)}")
+        logger.error(f"Failed to initialize services: {str(e)}")
         raise
 
 @app.on_event("shutdown")
-async def shutdown_db_client():
+async def shutdown_services():
+    # Close MongoDB connection
     app.mongodb_client.close()
-    logger.info("Closed MongoDB connection")
+    
+    # Cancel any running tasks
+    if hasattr(app, 'task_queue'):
+        tasks = list(app.task_queue.tasks.values())
+        if tasks:
+            logger.info(f"Cancelling {len(tasks)} running tasks")
+            await asyncio.gather(*[app.task_queue.cancel_task(task_id) for task_id in list(app.task_queue.tasks.keys())])
+    
+    logger.info("Shut down all services")
 
 # Health check endpoint
 @app.get("/health")
 async def health_check():
     try:
         # Check MongoDB connection
-        app.mongodb.command("ping")
+        await app.mongodb.command("ping")
+        
+        # Get task queue stats
+        active_tasks = len(app.task_queue.tasks)
+        
         return {
             "status": "healthy",
             "services": {
                 "api": "up",
-                "database": "up"
+                "database": "up",
+                "task_queue": {
+                    "status": "up",
+                    "active_tasks": active_tasks
+                }
             }
         }
     except Exception as e:
