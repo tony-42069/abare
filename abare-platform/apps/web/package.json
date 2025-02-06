@@ -16,14 +16,17 @@
     "@abare/ui": "workspace:*",
     "@emotion/react": "^11.11.3",
     "@emotion/styled": "^11.11.0",
+    "@mantine/charts": "^7.16.2",
     "@mantine/core": "^7.0.0",
     "@mantine/dropzone": "^7.16.2",
     "@mantine/hooks": "^7.0.0",
     "@tabler/icons-react": "^2.47.0",
+    "@types/recharts": "^1.8.29",
     "next": "^15.1.6",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-pdf": "^9.2.1"
+    "react-pdf": "^9.2.1",
+    "recharts": "^2.10.4"
   },
   "devDependencies": {
     "@abare/eslint-config": "workspace:*",

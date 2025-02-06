@@ -1,32 +1,33 @@
-import { format, parseISO } from 'date-fns';
-import { Document, Property, isDocument, isProperty } from './types';
+export * from './api/models';
+export * from './api/services';
 
-// Date formatting utilities
-export function formatDate(date: Date | string): string {
-  const parsedDate = typeof date === 'string' ? parseISO(date) : date;
-  return format(parsedDate, 'yyyy-MM-dd');
-}
+export { ApiClient } from './api/core/ApiClient';
+export { ApiError } from './api/core/ApiError';
+export { CancelablePromise } from './api/core/CancelablePromise';
+export { OpenAPI } from './api/core/OpenAPI';
+export { RequestOptions } from './api/core/RequestOptions';
 
-export function formatDateTime(date: Date | string): string {
-  const parsedDate = typeof date === 'string' ? parseISO(date) : date;
-  return format(parsedDate, 'yyyy-MM-dd HH:mm:ss');
-}
+// Re-export common types
+export type {
+  Property,
+  Tenant,
+  Document,
+  Analysis,
+} from './api/models';
 
-// Document Functions
-export function validateDocument(data: Document): Document {
-  if (!isDocument(data)) {
-    throw new Error('Invalid document data');
+// Re-export service types
+export type {
+  PropertyService,
+  DocumentService,
+  AnalysisService,
+} from './api/services';
+
+// Configure API client
+import { OpenAPI } from './api/core/OpenAPI';
+
+export const configureApi = (baseUrl: string, token?: string) => {
+  OpenAPI.BASE = baseUrl;
+  if (token) {
+    OpenAPI.TOKEN = token;
   }
-  return data;
-}
-
-// Property Functions
-export function validateProperty(data: Property): Property {
-  if (!isProperty(data)) {
-    throw new Error('Invalid property data');
-  }
-  return data;
-}
-
-// Re-export types
-export * from './types';
+};

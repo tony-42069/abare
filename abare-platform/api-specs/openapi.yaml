@@ -1,0 +1,249 @@
+openapi: 3.0.0
+info:
+  title: ABARE Platform API
+  version: 1.0.0
+  description: API specification for the ABARE Platform
+
+servers:
+  - url: /api/v1
+    description: API version 1
+
+components:
+  schemas:
+    Property:
+      type: object
+      required:
+        - id
+        - name
+        - address
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        address:
+          type: string
+        propertyType:
+          type: string
+          enum: [office, retail, industrial, multifamily]
+        squareFeet:
+          type: number
+        yearBuilt:
+          type: integer
+        tenants:
+          type: array
+          items:
+            $ref: '#/components/schemas/Tenant'
+
+    Tenant:
+      type: object
+      required:
+        - id
+        - name
+        - leaseStart
+        - leaseEnd
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        leaseStart:
+          type: string
+          format: date
+        leaseEnd:
+          type: string
+          format: date
+        squareFeet:
+          type: number
+        annualRent:
+          type: number
+        creditRating:
+          type: string
+
+    Document:
+      type: object
+      required:
+        - id
+        - name
+        - type
+        - url
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        type:
+          type: string
+          enum: [lease, operating_statement, rent_roll, other]
+        url:
+          type: string
+          format: uri
+        propertyId:
+          type: string
+          format: uuid
+        uploadedAt:
+          type: string
+          format: date-time
+        processingStatus:
+          type: string
+          enum: [pending, processing, completed, failed]
+
+    Analysis:
+      type: object
+      required:
+        - id
+        - propertyId
+        - type
+      properties:
+        id:
+          type: string
+          format: uuid
+        propertyId:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [financial, market, tenant]
+        status:
+          type: string
+          enum: [pending, in_progress, completed, failed]
+        results:
+          type: object
+        createdAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+
+paths:
+  /properties:
+    get:
+      summary: List properties
+      responses:
+        '200':
+          description: List of properties
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Property'
+    post:
+      summary: Create property
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Property'
+      responses:
+        '201':
+          description: Property created
+
+  /properties/{propertyId}:
+    get:
+      summary: Get property details
+      parameters:
+        - name: propertyId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Property details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Property'
+
+  /documents:
+    post:
+      summary: Upload document
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                propertyId:
+                  type: string
+                  format: uuid
+                type:
+                  type: string
+                  enum: [lease, operating_statement, rent_roll, other]
+      responses:
+        '201':
+          description: Document uploaded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Document'
+
+  /documents/{documentId}/process:
+    post:
+      summary: Process document
+      parameters:
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '202':
+          description: Document processing started
+
+  /analysis:
+    post:
+      summary: Create analysis
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - propertyId
+                - type
+              properties:
+                propertyId:
+                  type: string
+                  format: uuid
+                type:
+                  type: string
+                  enum: [financial, market, tenant]
+      responses:
+        '202':
+          description: Analysis started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Analysis'
+
+  /analysis/{analysisId}:
+    get:
+      summary: Get analysis results
+      parameters:
+        - name: analysisId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Analysis results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Analysis'

@@ -9,7 +9,8 @@
     "jsx": "preserve",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "@abare/*": ["../../packages/*/src"]
     }
   },
   "include": [
