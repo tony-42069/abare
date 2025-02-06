@@ -22,21 +22,21 @@ from config.settings import UPLOAD_DIR
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-async def get_database(request: Request) -> "AsyncIOMotorDatabase":
+def get_database() -> Any:
     """Get MongoDB database instance."""
-    return request.app.mongodb
+    return Depends(lambda req: req.app.mongodb)
 
-async def get_task_queue(request: Request) -> "TaskQueue":
+def get_task_queue() -> Any:
     """Get task queue instance."""
-    return request.app.task_queue
+    return Depends(lambda req: req.app.task_queue)
 
 @router.post("/upload", response_model=Document)
 async def upload_document(
     file: UploadFile = File(...),
     property_id: Optional[str] = Query(None, description="Associated property ID"),
     document_type: Optional[str] = Query(None, description="Document type (e.g., rent_roll, operating_statement)"),
-    db: "AsyncIOMotorDatabase" = Depends(get_database),
-    task_queue: "TaskQueue" = Depends(get_task_queue)
+    db: AsyncIOMotorDatabase = get_database(),
+    task_queue: TaskQueue = get_task_queue()
 ):
     """
     Upload and process a new document with specialized extraction.
@@ -164,8 +164,8 @@ async def upload_document(
 @router.get("/{document_id}/task", response_model=Dict[str, Any])
 async def get_document_task_status(
     document_id: str,
-    db: "AsyncIOMotorDatabase" = Depends(get_database),
-    task_queue: "TaskQueue" = Depends(get_task_queue)
+    db: AsyncIOMotorDatabase = get_database(),
+    task_queue: TaskQueue = get_task_queue()
 ):
     """Get the processing task status for a document."""
     try:
@@ -208,8 +208,8 @@ async def get_document_task_status(
 @router.get("/{document_id}", response_model=Document)
 async def get_document(
     document_id: str,
-    db: "AsyncIOMotorDatabase" = Depends(get_database),
-    task_queue: "TaskQueue" = Depends(get_task_queue)
+    db: AsyncIOMotorDatabase = get_database(),
+    task_queue: TaskQueue = get_task_queue()
 ):
     """Get document by ID."""
     from bson import ObjectId
@@ -234,7 +234,7 @@ async def list_documents(
     property_id: Optional[str] = None,
     document_type: Optional[str] = None,
     status: Optional[str] = None,
-    db: "AsyncIOMotorDatabase" = Depends(get_database)
+    db: AsyncIOMotorDatabase = get_database()
 ):
     """
     List documents with filtering and pagination.
@@ -271,8 +271,8 @@ async def list_documents(
 @router.post("/{document_id}/reprocess")
 async def reprocess_document(
     document_id: str,
-    db: "AsyncIOMotorDatabase" = Depends(get_database),
-    task_queue: "TaskQueue" = Depends(get_task_queue)
+    db: AsyncIOMotorDatabase = get_database(),
+    task_queue: TaskQueue = get_task_queue()
 ):
     """Reprocess a document that failed or needs updating."""
     try:
@@ -394,8 +394,8 @@ async def reprocess_document(
 @router.delete("/{document_id}")
 async def delete_document(
     document_id: str,
-    db: "AsyncIOMotorDatabase" = Depends(get_database),
-    task_queue: "TaskQueue" = Depends(get_task_queue)
+    db: AsyncIOMotorDatabase = get_database(),
+    task_queue: TaskQueue = get_task_queue()
 ):
     """Delete a document by ID."""
     try:

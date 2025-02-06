@@ -5,7 +5,24 @@ export type {
   PaginatedResponse,
 } from './api/models';
 
-// Re-export services and their types
+// Re-export property types
+export {
+  PropertyType,
+  RiskLevel,
+  type RiskProfile,
+} from './types/property';
+
+// Re-export credit risk types
+export {
+  CreditRiskLevel,
+  type TenantRisk,
+  type ConcentrationRisk,
+  type Tenant,
+  type CreditRiskAnalysis,
+  type CreditRiskDashboardData,
+} from './types/credit-risk';
+
+// Re-export service types
 export type {
   Document,
   DocumentTaskStatus,
