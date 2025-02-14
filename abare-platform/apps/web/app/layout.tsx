@@ -1,9 +1,10 @@
 import '@mantine/core/styles.css';
 import '@mantine/charts/styles.css';
-import { MantineProvider, ColorSchemeScript } from '@mantine/core';
+import { ColorSchemeScript } from '@mantine/core';
 import { theme } from '../theme';
 import { Inter } from 'next/font/google';
 import { Navigation } from '../components/Navigation';
+import { ColorSchemeProvider } from '../components/ColorSchemeProvider';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -16,7 +17,7 @@ const RootLayout = ({ children }: { children: React.ReactNode }) => {
   return (
     <html lang="en">
       <head>
-        <ColorSchemeScript defaultColorScheme="dark" />
+        <ColorSchemeScript />
         <link rel="icon" href="/favicon.ico" />
         <style>
           {`
@@ -41,9 +42,9 @@ const RootLayout = ({ children }: { children: React.ReactNode }) => {
         </style>
       </head>
       <body className={inter.className}>
-        <MantineProvider theme={theme} defaultColorScheme="dark">
+        <ColorSchemeProvider>
           <Navigation>{children}</Navigation>
-        </MantineProvider>
+        </ColorSchemeProvider>
       </body>
     </html>
   );

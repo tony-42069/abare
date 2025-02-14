@@ -1,102 +1,156 @@
 "use client";
 
 import { CreditRiskDashboard } from "@abare/ui";
-import { Container, Title } from "@mantine/core";
+import { Container, Title, LoadingOverlay, Alert } from "@mantine/core";
+import { AnalysisService, createApiClient } from "@abare/core";
+import { useEffect, useState } from "react";
+import { IconAlertCircle } from "@tabler/icons-react";
 
-// Sample data for initial development
-const SAMPLE_DATA = {
+export enum CreditRiskLevel {
+  Low = 'low',
+  Moderate = 'moderate',
+  High = 'high',
+  Severe = 'severe'
+}
+
+interface TenantRisk {
+  id: string;
+  tenantId: string;
+  leaseTermRemaining: number;
+  monthlyRent: number;
+  rentPerSqFt: number;
+  escalations: number;
+  securityDeposit: number;
+  defaultProbability: number;
+  marketRentDelta: number;
+  creditRiskLevel: CreditRiskLevel;
+}
+
+interface ConcentrationRisk {
+  tenantId: string;
+  squareFootage: number;
+  percentOfTotal: number;
+  annualRent: number;
+  percentOfRevenue: number;
+  industryExposure: number;
+}
+
+interface Tenant {
+  id: string;
+  name: string;
+  industry: string;
+  creditScore: number;
+  annualRevenue: number;
+  yearsInBusiness: number;
+  publicCompany: boolean;
+  employeeCount: number;
+}
+
+interface DashboardData {
   analysis: {
-    id: 'demo-1',
-    propertyId: 'prop-1',
-    overallRiskLevel: 'moderate',
-    tenantRisks: [
-      {
-        id: 'risk-1',
-        tenantId: 'tenant-1',
-        leaseTermRemaining: 48,
-        monthlyRent: 50000,
-        rentPerSqFt: 35,
-        escalations: 0.03,
-        securityDeposit: 150000,
-        defaultProbability: 0.05,
-        marketRentDelta: 5,
-        creditRiskLevel: 'low'
-      },
-      {
-        id: 'risk-2',
-        tenantId: 'tenant-2',
-        leaseTermRemaining: 24,
-        monthlyRent: 30000,
-        rentPerSqFt: 30,
-        escalations: 0.02,
-        securityDeposit: 60000,
-        defaultProbability: 0.15,
-        marketRentDelta: -2,
-        creditRiskLevel: 'high'
-      }
-    ],
-    concentrationRisk: [
-      {
-        tenantId: 'tenant-1',
-        squareFootage: 17000,
-        percentOfTotal: 42.5,
-        annualRent: 600000,
-        percentOfRevenue: 41.7,
-        industryExposure: 35
-      },
-      {
-        tenantId: 'tenant-2',
-        squareFootage: 12000,
-        percentOfTotal: 30,
-        annualRent: 360000,
-        percentOfRevenue: 25,
-        industryExposure: 25
-      }
-    ],
-    weightedAverageLeaseLength: 38,
-    totalDefaultRisk: 0.09,
-    marketVolatility: 0.12,
+    id: string;
+    propertyId: string;
+    overallRiskLevel: CreditRiskLevel;
+    tenantRisks: TenantRisk[];
+    concentrationRisk: ConcentrationRisk[];
+    weightedAverageLeaseLength: number;
+    totalDefaultRisk: number;
+    marketVolatility: number;
     portfolioImpact: {
-      diversificationBenefit: 0.08,
-      concentrationPenalty: 0.05,
-      netRiskAdjustment: 0.03
+      diversificationBenefit: number;
+      concentrationPenalty: number;
+      netRiskAdjustment: number;
+    };
+    createdAt: Date;
+    updatedAt: Date;
+  };
+  tenants: Tenant[];
+};
+
+// Transform API response to dashboard format
+const transformAnalysisData = (apiAnalysis: any) => {
+  const { results, metadata } = apiAnalysis;
+  
+  return {
+    analysis: {
+      id: apiAnalysis.id,
+      propertyId: apiAnalysis.property_id,
+      overallRiskLevel: results.risk_factors.find((f: any) => f.category === 'overall')?.level || 'moderate',
+      tenantRisks: results.insights.tenant_risks || [],
+      concentrationRisk: results.insights.concentration_risks || [],
+      weightedAverageLeaseLength: results.metrics.weighted_avg_lease_length,
+      totalDefaultRisk: results.metrics.total_default_risk,
+      marketVolatility: results.metrics.market_volatility,
+      portfolioImpact: results.insights.portfolio_impact,
+      createdAt: new Date(apiAnalysis.created_at),
+      updatedAt: new Date(apiAnalysis.updated_at)
     },
-    createdAt: new Date(),
-    updatedAt: new Date()
-  },
-  tenants: [
-    {
-      id: 'tenant-1',
-      name: 'Tech Solutions Inc',
-      industry: 'technology',
-      creditScore: 750,
-      annualRevenue: 50000000,
-      yearsInBusiness: 12,
-      publicCompany: true,
-      employeeCount: 250
-    },
-    {
-      id: 'tenant-2',
-      name: 'Retail Dynamics',
-      industry: 'retail',
-      creditScore: 620,
-      annualRevenue: 15000000,
-      yearsInBusiness: 5,
-      publicCompany: false,
-      employeeCount: 75
-    }
-  ]
+    tenants: metadata.tenants || []
+  };
 };
 
 export default function DashboardPage() {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
+
+  useEffect(() => {
+    const fetchAnalysis = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        const client = createApiClient();
+        const analysisService = new AnalysisService(client);
+        const response = await analysisService.listAnalyses(1, 1, undefined, 'credit_risk', 'completed');
+        
+        if (!response.items || response.items.length === 0) {
+          setError('No completed credit risk analysis found');
+          return;
+        }
+
+        const analysis = await analysisService.getAnalysis(response.items[0].id);
+        const transformedData = transformAnalysisData(analysis.data);
+        setDashboardData(transformedData);
+      } catch (err) {
+        setError('Failed to load dashboard data');
+        console.error('Dashboard data fetch error:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAnalysis();
+  }, []);
+
+  const handleTenantSelect = async (tenantId: string) => {
+    try {
+      // Implement tenant selection logic here
+      console.log('Selected tenant:', tenantId);
+    } catch (err) {
+      console.error('Tenant selection error:', err);
+    }
+  };
+
   return (
     <Container size="xl" py="xl">
       <Title order={1} mb="xl">ABARE Platform</Title>
-      <CreditRiskDashboard
-        analysis={SAMPLE_DATA.analysis}
-        tenants={SAMPLE_DATA.tenants}
-        onTenantSelect={(tenantId) => console.log('Selected tenant:', tenantId)}
-      />
+      
+      {loading && <LoadingOverlay visible={true} />}
+      
+      {error && (
+        <Alert icon={<IconAlertCircle size={16} />} title="Error" color="red" mb="xl">
+          {error}
+        </Alert>
+      )}
+      
+      {dashboardData && (
+        <CreditRiskDashboard
+          analysis={dashboardData.analysis}
+          tenants={dashboardData.tenants}
+          onTenantSelect={handleTenantSelect}
+        />
+      )}
     </Container>
   );
 }

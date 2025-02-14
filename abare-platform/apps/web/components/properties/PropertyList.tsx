@@ -1,7 +1,28 @@
 import { useState, useMemo } from 'react';
-import { SimpleGrid, TextInput, Select, Group, Stack } from '@mantine/core';
-import { IconSearch } from '@tabler/icons-react';
-import { Property, PropertyType, RiskProfile } from '@abare/core';
+import { 
+  SimpleGrid, 
+  TextInput, 
+  Select, 
+  Group, 
+  Stack, 
+  Title, 
+  Text,
+  Card,
+  ActionIcon,
+  Tooltip,
+  Badge,
+  Box,
+  Transition,
+  rem,
+} from '@mantine/core';
+import { 
+  IconSearch, 
+  IconAdjustments, 
+  IconBuildingSkyscraper,
+  IconChartPie,
+  IconX,
+} from '@tabler/icons-react';
+import { Property, PropertyType, RiskProfileType } from '@abare/core';
 import { PropertyCard } from './PropertyCard';
 
 interface PropertyListProps {
@@ -9,94 +30,238 @@ interface PropertyListProps {
   onPropertyClick?: (property: Property) => void;
 }
 
-type SortOption = 'name' | 'occupancy' | 'squareFeet';
+interface FilterStats {
+  total: number;
+  byType: Record<string, number>;
+  byRisk: Record<string, number>;
+}
 
 export function PropertyList({ properties, onPropertyClick }: PropertyListProps) {
-  const [search, setSearch] = useState('');
-  const [propertyType, setPropertyType] = useState<string>('all');
-  const [riskProfile, setRiskProfile] = useState<string>('all');
-  const [sortBy, setSortBy] = useState<SortOption>('name');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [typeFilter, setTypeFilter] = useState<string>('');
+  const [riskFilter, setRiskFilter] = useState<string>('');
+  const [showFilters, setShowFilters] = useState(false);
 
-  const filteredProperties = useMemo(() => {
-    return properties
-      .filter(property => {
-        const searchLower = search.toLowerCase();
-        const matchesSearch = 
-          property.name.toLowerCase().includes(searchLower) ||
-          property.address.street.toLowerCase().includes(searchLower) ||
-          property.address.city.toLowerCase().includes(searchLower);
-        
-        const matchesType = propertyType === 'all' || property.type === propertyType;
-        const matchesRisk = riskProfile === 'all' || property.riskProfile === riskProfile;
-        
-        return matchesSearch && matchesType && matchesRisk;
-      })
-      .sort((a, b) => {
-        switch (sortBy) {
-          case 'occupancy':
-            return b.occupancyRate - a.occupancyRate;
-          case 'squareFeet':
-            return b.squareFeet - a.squareFeet;
-          default:
-            return a.name.localeCompare(b.name);
-        }
-      });
-  }, [properties, search, propertyType, riskProfile, sortBy]);
+  const { filteredProperties, stats } = useMemo(() => {
+    const filtered = properties.filter(property => {
+      const matchesSearch = !searchQuery || 
+        property.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        property.address.toLowerCase().includes(searchQuery.toLowerCase());
+
+      const matchesType = !typeFilter || property.property_type === typeFilter;
+      const matchesRisk = !riskFilter || property.metadata.risk_profile.type === riskFilter;
+
+      return matchesSearch && matchesType && matchesRisk;
+    });
+
+    // Calculate statistics
+    const stats: FilterStats = {
+      total: filtered.length,
+      byType: {},
+      byRisk: {},
+    };
+
+    filtered.forEach(property => {
+      // Count by type
+      stats.byType[property.property_type] = (stats.byType[property.property_type] || 0) + 1;
+      // Count by risk profile
+      stats.byRisk[property.metadata.risk_profile.type] = 
+        (stats.byRisk[property.metadata.risk_profile.type] || 0) + 1;
+    });
+
+    return { filteredProperties: filtered, stats };
+  }, [properties, searchQuery, typeFilter, riskFilter]);
+
+  const hasActiveFilters = searchQuery || typeFilter || riskFilter;
+
+  const clearFilters = () => {
+    setSearchQuery('');
+    setTypeFilter('');
+    setRiskFilter('');
+  };
 
   return (
-    <Stack gap="md">
-      <Group grow>
-        <TextInput
-          placeholder="Search properties..."
-          value={search}
-          onChange={(event) => setSearch(event.currentTarget.value)}
-          leftSection={<IconSearch size={16} />}
-        />
-        <Select
-          value={propertyType}
-          onChange={(value) => setPropertyType(value || 'all')}
-          placeholder="Property Type"
-          data={[
-            { value: 'all', label: 'All Types' },
-            ...Object.values(PropertyType).map(type => ({
-              value: type,
-              label: type.charAt(0).toUpperCase() + type.slice(1)
-            }))
-          ]}
-        />
-        <Select
-          value={riskProfile}
-          onChange={(value) => setRiskProfile(value || 'all')}
-          placeholder="Risk Profile"
-          data={[
-            { value: 'all', label: 'All Profiles' },
-            ...Object.values(RiskProfile).map(profile => ({
-              value: profile,
-              label: profile.charAt(0).toUpperCase() + profile.slice(1)
-            }))
-          ]}
-        />
-        <Select
-          value={sortBy}
-          onChange={(value) => setSortBy(value as SortOption)}
-          placeholder="Sort By"
-          data={[
-            { value: 'name', label: 'Name' },
-            { value: 'occupancy', label: 'Occupancy' },
-            { value: 'squareFeet', label: 'Square Feet' }
-          ]}
-        />
-      </Group>
+    <Stack gap="xl">
+      <Card padding="md" radius="md" withBorder>
+        <Stack gap="md">
+          <Group justify="space-between">
+            <Group>
+              <IconBuildingSkyscraper 
+                size={24} 
+                style={{ color: 'var(--mantine-color-blue-6)' }}
+              />
+              <Title order={2}>Properties</Title>
+              <Badge size="lg" variant="gradient" gradient={{ from: 'blue', to: 'cyan' }}>
+                {stats.total}
+              </Badge>
+            </Group>
 
-      <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="md">
-        {filteredProperties.map((property) => (
-          <PropertyCard
-            key={property.id}
-            property={property}
-            onClick={() => onPropertyClick?.(property)}
+            <Group>
+              {hasActiveFilters && (
+                <Tooltip label="Clear all filters">
+                  <ActionIcon 
+                    variant="subtle" 
+                    onClick={clearFilters}
+                    size="lg"
+                  >
+                    <IconX size={20} />
+                  </ActionIcon>
+                </Tooltip>
+              )}
+              <Tooltip label={showFilters ? "Hide filters" : "Show filters"}>
+                <ActionIcon 
+                  variant="subtle" 
+                  onClick={() => setShowFilters(!showFilters)}
+                  size="lg"
+                  color={showFilters ? 'blue' : undefined}
+                >
+                  <IconAdjustments size={20} />
+                </ActionIcon>
+              </Tooltip>
+            </Group>
+          </Group>
+
+          <TextInput
+            placeholder="Search properties by name or address..."
+            leftSection={<IconSearch size={16} />}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            style={{ flex: 1 }}
+            size="md"
           />
-        ))}
-      </SimpleGrid>
+
+          <Transition 
+            mounted={showFilters} 
+            transition="slide-down"
+            duration={200}
+          >
+            {(styles) => (
+              <Box style={styles}>
+                <Group grow>
+                  <Card padding="sm" radius="md" withBorder>
+                    <Stack gap="xs">
+                      <Group justify="space-between">
+                        <Text size="sm" c="dimmed">Property Type</Text>
+                        {typeFilter && (
+                          <ActionIcon 
+                            variant="subtle" 
+                            size="sm"
+                            onClick={() => setTypeFilter('')}
+                          >
+                            <IconX size={14} />
+                          </ActionIcon>
+                        )}
+                      </Group>
+                      <Select
+                        placeholder="All Types"
+                        value={typeFilter}
+                        onChange={(value) => setTypeFilter(value || '')}
+                        data={[
+                          { value: '', label: 'All Types' },
+                          ...Object.values(PropertyType).map(type => ({
+                            value: type,
+                            label: type.split('-').map(word => 
+                              word.charAt(0).toUpperCase() + word.slice(1)
+                            ).join(' '),
+                            rightSection: stats.byType[type] && (
+                              <Badge size="sm" variant="light">
+                                {stats.byType[type]}
+                              </Badge>
+                            )
+                          }))
+                        ]}
+                      />
+                    </Stack>
+                  </Card>
+
+                  <Card padding="sm" radius="md" withBorder>
+                    <Stack gap="xs">
+                      <Group justify="space-between">
+                        <Text size="sm" c="dimmed">Risk Profile</Text>
+                        {riskFilter && (
+                          <ActionIcon 
+                            variant="subtle" 
+                            size="sm"
+                            onClick={() => setRiskFilter('')}
+                          >
+                            <IconX size={14} />
+                          </ActionIcon>
+                        )}
+                      </Group>
+                      <Select
+                        placeholder="All Risk Profiles"
+                        value={riskFilter}
+                        onChange={(value) => setRiskFilter(value || '')}
+                        data={[
+                          { value: '', label: 'All Risk Profiles' },
+                          ...Object.values(RiskProfileType).map(type => ({
+                            value: type,
+                            label: type.split('-').map(word => 
+                              word.charAt(0).toUpperCase() + word.slice(1)
+                            ).join(' '),
+                            rightSection: stats.byRisk[type] && (
+                              <Badge size="sm" variant="light">
+                                {stats.byRisk[type]}
+                              </Badge>
+                            )
+                          }))
+                        ]}
+                      />
+                    </Stack>
+                  </Card>
+                </Group>
+              </Box>
+            )}
+          </Transition>
+        </Stack>
+      </Card>
+
+      {filteredProperties.length === 0 ? (
+        <Card 
+          padding="xl" 
+          radius="md" 
+          withBorder 
+          style={{ 
+            textAlign: 'center',
+            background: 'rgba(255,255,255,0.03)'
+          }}
+        >
+          <Stack align="center" gap="md">
+            <IconBuildingSkyscraper 
+              size={48} 
+              style={{ color: 'var(--mantine-color-gray-5)' }}
+            />
+            <Title order={3}>No properties found</Title>
+            <Text c="dimmed">
+              Try adjusting your search or filters to find what you're looking for
+            </Text>
+          </Stack>
+        </Card>
+      ) : (
+        <SimpleGrid 
+          cols={{ base: 1, sm: 2, lg: 3 }} 
+          spacing="lg"
+          verticalSpacing="lg"
+        >
+          {filteredProperties.map((property) => (
+            <Transition
+              key={property.id}
+              mounted={true}
+              transition="fade"
+              duration={200}
+            >
+              {(styles) => (
+                <div style={styles}>
+                  <PropertyCard
+                    property={property}
+                    onClick={onPropertyClick}
+                  />
+                </div>
+              )}
+            </Transition>
+          ))}
+        </SimpleGrid>
+      )}
     </Stack>
   );
 }

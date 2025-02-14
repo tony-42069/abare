@@ -12,7 +12,7 @@ const darkBlue: MantineColorsTuple = [
   '#154C91',
   '#0B3773',
   '#022356',
-  '#011330', // Darkest shade - used for background
+  '#011330',
 ];
 
 const neonBlue: MantineColorsTuple = [
@@ -41,12 +41,26 @@ const neonPurple: MantineColorsTuple = [
   '#120338',
 ];
 
+const neonCyan: MantineColorsTuple = [
+  '#E6FFFB',
+  '#B5F5EC',
+  '#87E8DE',
+  '#5CDBD3',
+  '#36CFC9',
+  '#13C2C2',
+  '#08979C',
+  '#006D75',
+  '#00474F',
+  '#002329',
+];
+
 export const theme: CustomTheme = {
   primaryColor: 'neonBlue',
   colors: {
     darkBlue,
     neonBlue,
     neonPurple,
+    neonCyan,
   },
   fontFamily: 'Inter, sans-serif',
   primaryShade: { light: 6, dark: 5 },
@@ -56,23 +70,46 @@ export const theme: CustomTheme = {
   components: {
     Card: {
       defaultProps: {
-        bg: 'darkBlue.9',
+        bg: 'transparent',
+        style: {
+          backdropFilter: 'blur(20px)',
+          background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))',
+          border: '1px solid rgba(255,255,255,0.1)',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
+        },
       },
     },
     Paper: {
       defaultProps: {
-        bg: 'darkBlue.9',
+        bg: 'transparent',
+        style: {
+          backdropFilter: 'blur(20px)',
+          background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))',
+          border: '1px solid rgba(255,255,255,0.1)',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
+        },
       },
     },
     Button: {
       defaultProps: {
         variant: 'gradient',
         gradient: { from: 'neonBlue.6', to: 'neonPurple.6', deg: 45 },
+        style: {
+          boxShadow: '0 4px 15px rgba(0,0,0,0.2)',
+          transition: 'all 0.2s ease',
+          '&:hover': {
+            transform: 'translateY(-2px)',
+            boxShadow: '0 6px 20px rgba(0,0,0,0.25)',
+          },
+        },
       },
     },
     Title: {
       defaultProps: {
         c: 'white',
+        style: {
+          textShadow: '0 2px 4px rgba(0,0,0,0.2)',
+        },
       },
     },
     Text: {
@@ -80,13 +117,41 @@ export const theme: CustomTheme = {
         c: 'gray.3',
       },
     },
+    Badge: {
+      defaultProps: {
+        variant: 'gradient',
+        gradient: { from: 'neonBlue.6', to: 'neonCyan.6', deg: 45 },
+      },
+    },
   },
   other: {
-    backgroundGradient: 'linear-gradient(135deg, #011330 0%, #022356 100%)',
+    backgroundGradient: 'radial-gradient(circle at top right, #022356 0%, #011330 100%)',
     glassEffect: {
-      background: 'rgba(1, 19, 48, 0.7)',
-      backdropFilter: 'blur(10px)',
+      background: 'rgba(1, 19, 48, 0.5)',
+      backdropFilter: 'blur(20px)',
       border: '1px solid rgba(255, 255, 255, 0.1)',
+      boxShadow: '0 8px 32px rgba(0,0,0,0.1)',
+      transition: 'all 0.3s ease',
+      '&:hover': {
+        background: 'rgba(1, 19, 48, 0.6)',
+        boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
+      },
+    },
+    cardGlow: {
+      '&::before': {
+        content: '""',
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        borderRadius: 'inherit',
+        padding: '2px',
+        background: 'linear-gradient(45deg, rgba(255,255,255,0.1), rgba(255,255,255,0.2))',
+        WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+        WebkitMaskComposite: 'xor',
+        maskComposite: 'exclude',
+      },
     },
   },
 };
