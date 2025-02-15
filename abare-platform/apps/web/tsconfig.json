@@ -10,7 +10,9 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./*"],
-      "@abare/*": ["../../packages/*/src"]
+      "@abare/*": ["../../packages/*/src"],
+      "@abare/analytics": ["../../packages/analytics/src"],
+      "@abare/analytics/*": ["../../packages/analytics/src/*"]
     }
   },
   "include": [

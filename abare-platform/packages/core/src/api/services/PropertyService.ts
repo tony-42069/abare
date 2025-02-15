@@ -1,18 +1,19 @@
 import { BaseService } from './index';
 import { ApiResponse, PaginatedResponse } from '../models';
+import { PropertyType, PropertyMetadata } from '../../types/property';
 
 export interface Property {
   id: string;
   name: string;
   address: string;
-  property_type: string;
+  property_type: PropertyType;
   square_footage: number;
   year_built?: number;
   purchase_price?: number;
   current_value?: number;
   occupancy_rate?: number;
   status: string;
-  metadata: Record<string, any>;
+  metadata: PropertyMetadata;
   created_at: string;
   updated_at: string;
 }
@@ -20,13 +21,13 @@ export interface Property {
 export interface CreatePropertyInput {
   name: string;
   address: string;
-  property_type: string;
+  property_type: PropertyType;
   square_footage: number;
   year_built?: number;
   purchase_price?: number;
   current_value?: number;
   occupancy_rate?: number;
-  metadata?: Record<string, any>;
+  metadata?: PropertyMetadata;
 }
 
 export interface UpdatePropertyInput extends Partial<CreatePropertyInput> {
@@ -47,7 +48,7 @@ export class PropertyService extends BaseService {
   async listProperties(
     page: number = 1,
     pageSize: number = 10,
-    propertyType?: string,
+    propertyType?: PropertyType,
     status?: string
   ): Promise<PaginatedResponse<Property>> {
     const params: Record<string, any> = { page, pageSize };

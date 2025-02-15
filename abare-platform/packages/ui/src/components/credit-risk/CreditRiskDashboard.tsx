@@ -1,16 +1,17 @@
-import { Grid, Container, Title, Group } from '@mantine/core';
-import { CreditRiskLevel } from '@abare/core';
-import { CreditRiskDashboardProps } from '../../types/credit-risk';
-import { RiskScoreCard } from './RiskScoreCard';
+import { Grid, Container, Title } from '@mantine/core';
+import { CreditRiskDashboardProps, ConcentrationChartProps, LeaseRolloverChartProps } from '../../types/credit-risk';
+import { CreditRiskLevel, TenantConcentration, LeaseRisk } from '@abare/core/src/types';
+import { StatsCard } from '../common/StatsCard';
+import { IconChartBar, IconCalendarTime, IconChartLine, IconBuildingBank } from '@tabler/icons-react';
 import { TenantRiskCard } from './TenantRiskCard';
 import { ConcentrationChart } from './ConcentrationChart';
 import { LeaseRolloverChart } from './LeaseRolloverChart';
 
 export const CreditRiskDashboard = ({ analysis, tenants, onTenantSelect }: CreditRiskDashboardProps) => {
   // Prepare data for concentration chart
-  const concentrationData = analysis.concentrationRisk.map((concentration) => {
+  const concentrationData: ConcentrationChartProps['data'] = analysis.concentrationRisk.map((concentration: TenantConcentration) => {
     const tenant = tenants.find((t) => t.id === concentration.tenantId);
-    const risk = analysis.tenantRisks.find((r) => r.tenantId === concentration.tenantId);
+    const risk = analysis.tenantRisks.find((r: LeaseRisk) => r.tenantId === concentration.tenantId);
     return {
       tenantName: tenant?.name || 'Unknown',
       percentOfRevenue: concentration.percentOfRevenue,
@@ -19,7 +20,7 @@ export const CreditRiskDashboard = ({ analysis, tenants, onTenantSelect }: Credi
   });
 
   // Prepare data for lease rollover chart
-  const rolloverData = analysis.tenantRisks.map((risk) => {
+  const rolloverData: LeaseRolloverChartProps['data'] = analysis.tenantRisks.map((risk: LeaseRisk) => {
     const tenant = tenants.find((t) => t.id === risk.tenantId);
     const monthsLeft = risk.leaseTermRemaining;
     const expiryDate = new Date();
@@ -30,7 +31,13 @@ export const CreditRiskDashboard = ({ analysis, tenants, onTenantSelect }: Credi
       expiringRent: risk.monthlyRent * 12,
       riskLevel: risk.creditRiskLevel
     };
-  }).sort((a, b) => new Date(a.month).getTime() - new Date(b.month).getTime());
+  }).sort((a: { month: string }, b: { month: string }) => new Date(a.month).getTime() - new Date(b.month).getTime());
+
+  // Calculate trends based on historical data (mocked for now)
+  const riskScoreTrend = -5;
+  const leaseTermTrend = 2;
+  const volatilityTrend = 8;
+  const portfolioImpactTrend = -3;
 
   return (
     <Container size="xl" py="xl">
@@ -38,40 +45,43 @@ export const CreditRiskDashboard = ({ analysis, tenants, onTenantSelect }: Credi
 
       <Grid mb="xl">
         <Grid.Col span={3}>
-          <RiskScoreCard
-            score={100 - analysis.totalDefaultRisk * 100}
-            level={analysis.overallRiskLevel}
-            label="Overall Risk Score"
+          <StatsCard
+            title="Overall Risk Score"
+            value={Math.round(100 - analysis.totalDefaultRisk * 100)}
+            trend={riskScoreTrend}
+            icon={<IconChartBar size={20} />}
+            description="Based on tenant mix and market conditions"
+            gradient={['#1971c2', '#228be6']}
           />
         </Grid.Col>
         <Grid.Col span={3}>
-          <RiskScoreCard
-            score={analysis.weightedAverageLeaseLength}
-            level={analysis.weightedAverageLeaseLength > 60 ? CreditRiskLevel.Low : 
-                   analysis.weightedAverageLeaseLength > 36 ? CreditRiskLevel.Moderate :
-                   analysis.weightedAverageLeaseLength > 24 ? CreditRiskLevel.High :
-                   CreditRiskLevel.Severe}
-            label="Avg. Lease Term (Months)"
+          <StatsCard
+            title="Avg. Lease Term"
+            value={Math.round(analysis.weightedAverageLeaseLength)}
+            trend={leaseTermTrend}
+            icon={<IconCalendarTime size={20} />}
+            description="Weighted average lease length in months"
+            gradient={['#2f9e44', '#40c057']}
           />
         </Grid.Col>
         <Grid.Col span={3}>
-          <RiskScoreCard
-            score={analysis.marketVolatility * 100}
-            level={analysis.marketVolatility > 0.2 ? CreditRiskLevel.Severe :
-                   analysis.marketVolatility > 0.15 ? CreditRiskLevel.High :
-                   analysis.marketVolatility > 0.1 ? CreditRiskLevel.Moderate :
-                   CreditRiskLevel.Low}
-            label="Market Volatility"
+          <StatsCard
+            title="Market Volatility"
+            value={`${(analysis.marketVolatility * 100).toFixed(1)}%`}
+            trend={volatilityTrend}
+            icon={<IconChartLine size={20} />}
+            description="Current market volatility index"
+            gradient={['#e8590c', '#fd7e14']}
           />
         </Grid.Col>
         <Grid.Col span={3}>
-          <RiskScoreCard
-            score={analysis.portfolioImpact.netRiskAdjustment * 100}
-            level={analysis.portfolioImpact.netRiskAdjustment > 0.1 ? CreditRiskLevel.Low :
-                   analysis.portfolioImpact.netRiskAdjustment > 0 ? CreditRiskLevel.Moderate :
-                   analysis.portfolioImpact.netRiskAdjustment > -0.1 ? CreditRiskLevel.High :
-                   CreditRiskLevel.Severe}
-            label="Portfolio Impact"
+          <StatsCard
+            title="Portfolio Impact"
+            value={`${(analysis.portfolioImpact.netRiskAdjustment * 100).toFixed(1)}%`}
+            trend={portfolioImpactTrend}
+            icon={<IconBuildingBank size={20} />}
+            description="Net impact on portfolio risk profile"
+            gradient={['#5f3dc4', '#7048e8']}
           />
         </Grid.Col>
       </Grid>
@@ -87,10 +97,10 @@ export const CreditRiskDashboard = ({ analysis, tenants, onTenantSelect }: Credi
 
       <Title order={3} mb="lg">Tenant Risk Profiles</Title>
       <Grid>
-        {analysis.tenantRisks.map((risk) => {
+        {analysis.tenantRisks.map((risk: LeaseRisk) => {
           const tenant = tenants.find((t) => t.id === risk.tenantId);
           const concentration = analysis.concentrationRisk.find(
-            (c) => c.tenantId === risk.tenantId
+            (c: TenantConcentration) => c.tenantId === risk.tenantId
           );
 
           if (!tenant || !concentration) return null;

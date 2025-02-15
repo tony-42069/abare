@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@abare/core": "workspace:*",
-    "mathjs": "12.3.0"
+    "mathjs": "11.11.1"
   },
   "devDependencies": {
     "@types/node": "20.11.16",

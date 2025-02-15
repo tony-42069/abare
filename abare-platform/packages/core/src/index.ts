@@ -9,6 +9,7 @@ export type {
 export {
   PropertyType,
   RiskLevel,
+  RiskProfileType,
   type RiskProfile,
 } from './types/property';
 
