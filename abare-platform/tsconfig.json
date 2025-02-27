@@ -4,16 +4,24 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
-      "@abare/*": ["packages/*/src"]
+      "@abare/core": ["packages/core/src"],
+      "@abare/core/*": ["packages/core/src/*"],
+      "@abare/analytics": ["packages/analytics/src"],
+      "@abare/analytics/*": ["packages/analytics/src/*"],
+      "@abare/market-data": ["packages/market-data/src"],
+      "@abare/market-data/*": ["packages/market-data/src/*"],
+      "@abare/ui": ["packages/ui/src"],
+      "@abare/ui/*": ["packages/ui/src/*"]
     },
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "module": "ESNext",
     "target": "ES2021",
-    "lib": ["ES2021"],
+    "lib": ["ES2021", "DOM"],
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "strict": true
+    "strict": true,
+    "composite": true
   },
   "include": ["packages/*/src/**/*"],
   "exclude": ["node_modules"],
@@ -26,6 +34,9 @@
     },
     {
       "path": "packages/market-data"
+    },
+    {
+      "path": "packages/ui"
     }
   ]
 }

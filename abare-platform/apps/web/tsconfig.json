@@ -10,10 +10,17 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./*"],
-      "@abare/*": ["../../packages/*/src"],
+      "@abare/core": ["../../packages/core/src"],
+      "@abare/core/*": ["../../packages/core/src/*"],
       "@abare/analytics": ["../../packages/analytics/src"],
-      "@abare/analytics/*": ["../../packages/analytics/src/*"]
-    }
+      "@abare/analytics/*": ["../../packages/analytics/src/*"],
+      "@abare/market-data": ["../../packages/market-data/src"],
+      "@abare/market-data/*": ["../../packages/market-data/src/*"],
+      "@abare/ui": ["../../packages/ui/src"],
+      "@abare/ui/*": ["../../packages/ui/src/*"]
+    },
+    "allowJs": true,
+    "skipLibCheck": true
   },
   "include": [
     "**/*.ts",
@@ -24,5 +31,11 @@
   ],
   "exclude": [
     "node_modules"
+  ],
+  "references": [
+    { "path": "../../packages/core" },
+    { "path": "../../packages/analytics" },
+    { "path": "../../packages/market-data" },
+    { "path": "../../packages/ui" }
   ]
 }

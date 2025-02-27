@@ -16,11 +16,16 @@ export {
 // Re-export credit risk types
 export {
   CreditRiskLevel,
+  IndustryType,
   type TenantRisk,
   type ConcentrationRisk,
   type Tenant,
   type CreditRiskAnalysis,
   type CreditRiskDashboardData,
+  // Added exports for compatibility with analytics package
+  type TenantProfile,
+  type LeaseRisk,
+  type TenantConcentration,
 } from './types/credit-risk';
 
 // Re-export service types
@@ -40,6 +45,9 @@ export type {
   CreateAnalysisInput,
   UpdateAnalysisInput,
 } from './api/services/AnalysisService';
+
+// Re-export base analysis type
+export type { BaseAnalysis } from './types/analysis';
 
 // Re-export service implementations
 export { DocumentService } from './api/services/DocumentService';

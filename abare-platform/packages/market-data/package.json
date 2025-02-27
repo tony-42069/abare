@@ -6,9 +6,10 @@
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {
-    "build": "tsc",
-    "clean": "rmdir /s /q dist",
-    "lint": "eslint \"src/**/*.ts\""
+    "build": "npx -p typescript tsc",
+    "clean": "rm -rf dist",
+    "lint": "eslint \"src/**/*.ts\"",
+    "typecheck": "npx -p typescript tsc --noEmit"
   },
   "dependencies": {
     "@abare/core": "workspace:*",

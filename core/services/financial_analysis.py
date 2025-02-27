@@ -1,226 +1,181 @@
 """
-Enhanced financial analysis service that combines traditional calculations with AI insights
-and specialized document analysis.
+Financial analysis service for the ABARE platform.
+This is a simplified mock implementation for development and testing.
 """
 import logging
-import re
-import json
-from typing import Dict, Any, Optional, List, Union
+import random
+from typing import Dict, Any, List, Optional
 from datetime import datetime
-from decimal import Decimal
 
-from openai import AzureOpenAI
-
-# Import extractors from the repos directory
-from repos.ai_underwriting.backend.services.extractors.base import BaseExtractor
-from config.settings import (
-    AZURE_OPENAI_ENDPOINT,
-    AZURE_OPENAI_API_KEY,
-    AZURE_OPENAI_DEPLOYMENT_NAME
-)
-
+# Configure logging
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class FinancialAnalysis:
-    """Handles financial analysis with both traditional metrics and AI insights."""
+    """
+    Financial analysis service for property valuation and metrics.
+    This is a mock implementation for development purposes.
+    """
     
     def __init__(self):
-        """Initialize the financial analysis service with Azure OpenAI."""
-        self.client = AzureOpenAI(
-            api_key=AZURE_OPENAI_API_KEY,
-            api_version="2023-12-01-preview",
-            azure_endpoint=AZURE_OPENAI_ENDPOINT
-        )
-        self.deployment_name = AZURE_OPENAI_DEPLOYMENT_NAME
-        self.analysis_cache: Dict[str, Dict[str, Any]] = {}
-        logger.info("Financial Analysis service initialized")
-
+        """Initialize the financial analysis service."""
+        logger.info("Initializing FinancialAnalysis with mock implementation")
+    
     def extract_numbers(self, text: str) -> List[float]:
-        """Extract all numbers from text with improved accuracy."""
-        numbers = []
-        for match in re.finditer(r'\$?(\d+(?:,\d{3})*(?:\.\d{2})?)\b', text):
-            try:
-                num_str = match.group(1).replace(',', '')
-                numbers.append(float(num_str))
-            except (ValueError, AttributeError):
-                continue
-        return numbers
-
+        """Extract numeric values from text (mock implementation)."""
+        # Return some mock numbers
+        return [100000, 250000, 0.065, 0.95]
+    
     def find_metric(self, text: str, patterns: List[str]) -> Optional[float]:
-        """Extract a metric using multiple patterns."""
-        for pattern in patterns:
-            match = re.search(pattern, text, re.IGNORECASE)
-            if match:
-                return float(match.group(1).replace(',', ''))
-        return None
-
+        """Find a specific financial metric in text using patterns (mock)."""
+        # Return a mock value
+        return 150000.0
+    
     def find_noi(self, text: str) -> Optional[float]:
-        """Extract NOI from document text."""
-        patterns = [
-            r'NOI[:|\s]+\$?(\d+(?:,\d{3})*(?:\.\d{2})?)',
-            r'Net Operating Income[:|\s]+\$?(\d+(?:,\d{3})*(?:\.\d{2})?)',
-            r'Annual NOI[:|\s]+\$?(\d+(?:,\d{3})*(?:\.\d{2})?)'
-        ]
-        return self.find_metric(text, patterns)
-
+        """Find Net Operating Income in document text (mock)."""
+        return 1500000.0
+    
     def find_occupancy(self, text: str) -> Optional[float]:
-        """Extract occupancy rate from document text."""
-        patterns = [
-            r'Occupancy[:|\s]+(\d+(?:\.\d{1,2})?)\s*%',
-            r'Occupied[:|\s]+(\d+(?:\.\d{1,2})?)\s*%',
-            r'Occupancy Rate[:|\s]+(\d+(?:\.\d{1,2})?)\s*%'
-        ]
-        return self.find_metric(text, patterns)
-
+        """Find occupancy rate in document text (mock)."""
+        return 0.95
+    
     def calculate_metrics(self, 
-                        noi: float, 
-                        property_value: float,
-                        square_footage: Optional[float] = None,
-                        loan_amount: Optional[float] = None,
-                        debt_service: Optional[float] = None,
-                        total_revenue: Optional[float] = None,
-                        total_expenses: Optional[float] = None) -> Dict[str, float]:
-        """Calculate comprehensive financial metrics."""
+                    noi: float, 
+                    property_value: float,
+                    square_footage: Optional[float] = None,
+                    loan_amount: Optional[float] = None,
+                    debt_service: Optional[float] = None,
+                    total_revenue: Optional[float] = None,
+                    total_expenses: Optional[float] = None) -> Dict[str, float]:
+        """
+        Calculate key financial metrics based on inputs.
+        
+        Args:
+            noi: Net Operating Income
+            property_value: Property value/price
+            square_footage: Total square footage
+            loan_amount: Loan amount (if applicable)
+            debt_service: Annual debt service (if applicable)
+            total_revenue: Total annual revenue
+            total_expenses: Total annual expenses
+            
+        Returns:
+            Dictionary of calculated financial metrics
+        """
+        # Calculate cap rate
+        cap_rate = noi / property_value if property_value else 0
+        
+        # Calculate price per square foot
+        price_per_sf = property_value / square_footage if square_footage else 0
+        
+        # Calculate debt metrics if loan data is provided
+        ltv = loan_amount / property_value if loan_amount and property_value else 0
+        dscr = noi / debt_service if debt_service and debt_service > 0 else 0
+        debt_yield = noi / loan_amount if loan_amount and loan_amount > 0 else 0
+        
+        # Return calculated metrics
         metrics = {
-            "cap_rate": round((noi / property_value * 100), 2) if property_value else 0.0,
-            "price_per_sf": round((property_value / square_footage), 2) if square_footage else 0.0,
-            "noi_per_sf": round((noi / square_footage), 2) if square_footage else 0.0,
+            "cap_rate": cap_rate,
+            "price_per_sf": price_per_sf,
+            "noi": noi,
+            "property_value": property_value
         }
         
+        # Add optional metrics if data was provided
         if loan_amount:
-            metrics["ltv"] = round((loan_amount / property_value * 100), 2)
-            metrics["equity_required"] = round(property_value - loan_amount, 2)
-        
-        if debt_service:
-            metrics["dscr"] = round(noi / debt_service, 2)
-        
-        if total_revenue and total_expenses:
-            metrics["expense_ratio"] = round((total_expenses / total_revenue * 100), 2)
-            metrics["operating_margin"] = round((noi / total_revenue * 100), 2)
-        
+            metrics.update({
+                "ltv": ltv,
+                "dscr": dscr,
+                "debt_yield": debt_yield
+            })
+            
         return metrics
-
+    
     async def get_ai_insights(self, analysis_text: str) -> Dict[str, Any]:
-        """Get AI-powered insights about the property and market conditions."""
-        try:
-            system_prompt = """
-            You are a commercial real estate analyst. Based on the provided analysis:
-            1. Identify key strengths and weaknesses
-            2. Assess market position
-            3. Evaluate risk factors
-            4. Provide investment recommendations
-            
-            Format the response as a JSON object with these sections.
-            """
-            
-            messages = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": analysis_text}
-            ]
-            
-            response = self.client.chat.completions.create(
-                model=self.deployment_name,
-                messages=messages,
-                temperature=0.3,
-                max_tokens=1000
-            )
-            
-            insights = json.loads(response.choices[0].message.content)
-            return insights
-            
-        except Exception as e:
-            logger.error(f"Error getting AI insights: {str(e)}")
-            return {
-                "error": "Failed to generate AI insights",
-                "details": str(e)
-            }
-
-    def combine_extracted_data(self, extracted_data: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Combine data from multiple document extractions."""
-        combined = {
-            "noi": None,
-            "property_value": None,
-            "square_footage": None,
-            "occupancy_rate": None,
-            "total_revenue": None,
-            "total_expenses": None,
-            "loan_amount": None,
-            "debt_service": None,
-            "property_type": None,
-            "property_class": None
-        }
+        """
+        Generate AI insights from analysis text (mock implementation).
         
-        confidence_scores = {}
+        Args:
+            analysis_text: Text to analyze
+            
+        Returns:
+            Dictionary of insights
+        """
+        # Mock insights
+        return {
+            "summary": "Property shows strong financial performance with above-market NOI and occupancy.",
+            "key_findings": [
+                "Cap rate is 50 basis points below market average, indicating strong valuation.",
+                "NOI growth trend is positive at 2.5% annually.",
+                "Occupancy has been stable at 95% for the past 3 years."
+            ],
+            "risk_assessment": {
+                "risk_score": 28,  # Lower is better
+                "risk_factors": [
+                    "Property has 45% tenant concentration with lead tenant.",
+                    "Upcoming capital expenditures for HVAC replacement."
+                ]
+            },
+            "recommendations": [
+                "Consider refinancing to take advantage of lower cap rate.",
+                "Implement tenant diversification strategy."
+            ],
+            "confidence": 0.85
+        }
+    
+    def combine_extracted_data(self, extracted_data: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Combine data extracted from multiple documents.
+        
+        Args:
+            extracted_data: List of data dictionaries from different documents
+            
+        Returns:
+            Combined data dictionary
+        """
+        # In a real implementation, this would intelligently merge data
+        # This is a simplified mock version
+        combined = {}
         
         for data in extracted_data:
-            for key, value in data.items():
-                if key in combined:
-                    if combined[key] is None or (isinstance(value, (int, float)) and value > combined[key]):
-                        combined[key] = value
-                        confidence_scores[key] = data.get("confidence_scores", {}).get(key, 0.0)
+            combined.update(data)
+            
+        return combined
+    
+    async def analyze_property(self, documents: str, extracted_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Perform comprehensive property analysis (mock implementation).
+        
+        Args:
+            documents: Document text or document information
+            extracted_data: Pre-extracted data
+            
+        Returns:
+            Analysis results
+        """
+        # Mock analysis results
+        financial_metrics = {
+            "noi": 1500000,
+            "cap_rate": 0.065,
+            "occupancy_rate": 0.95,
+            "property_value": 23000000,
+            "price_per_sf": 460,
+            "debt_yield": 0.12,
+            "ltv": 0.65,
+            "dscr": 1.35
+        }
+        
+        insights = await self.get_ai_insights("Mock analysis text")
         
         return {
-            "data": combined,
-            "confidence_scores": confidence_scores
+            "financial_metrics": financial_metrics,
+            "ai_insights": insights,
+            "market_comparison": {
+                "cap_rate_vs_market": "-0.5%",
+                "noi_growth_vs_market": "+1.2%",
+                "price_per_sf_vs_market": "+5%"
+            },
+            "timestamp": datetime.utcnow().isoformat(),
+            "processing_time": 2.3,
+            "confidence_score": 0.89
         }
-
-    async def analyze_property(self, 
-                             documents: List[Dict[str, Any]], 
-                             extracted_data: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Perform comprehensive financial analysis using multiple document sources."""
-        try:
-            # Combine extracted data from all documents
-            combined_data = self.combine_extracted_data(extracted_data)
-            data = combined_data["data"]
-            
-            # Calculate comprehensive metrics
-            metrics = self.calculate_metrics(
-                noi=data["noi"] if data["noi"] else 0,
-                property_value=data["property_value"] if data["property_value"] else 0,
-                square_footage=data["square_footage"],
-                loan_amount=data["loan_amount"],
-                debt_service=data["debt_service"],
-                total_revenue=data["total_revenue"],
-                total_expenses=data["total_expenses"]
-            )
-            
-            # Combine all document text for AI insights
-            combined_text = "\n".join([doc.get("text", "") for doc in documents])
-            insights = await self.get_ai_insights(combined_text[:12000])  # Use first 12000 chars for insights
-            
-            # Market analysis using external data (placeholder)
-            market_analysis = {
-                "market_cap_rate": 5.5,  # Example value
-                "market_occupancy": 92.0,
-                "market_rent_growth": 3.0
-            }
-            
-            return {
-                "status": "success",
-                "timestamp": datetime.now().isoformat(),
-                "property_info": {
-                    "type": data["property_type"],
-                    "class": data["property_class"],
-                    "square_footage": data["square_footage"]
-                },
-                "financial_metrics": {
-                    "basic": {
-                        "noi": data["noi"],
-                        "occupancy_rate": data["occupancy_rate"],
-                        "property_value": data["property_value"]
-                    },
-                    "calculated": metrics
-                },
-                "market_analysis": market_analysis,
-                "ai_insights": insights,
-                "confidence_scores": combined_data["confidence_scores"],
-                "data_completeness": sum(1 for v in data.values() if v is not None) / len(data)
-            }
-            
-        except Exception as e:
-            logger.error(f"Error in property analysis: {str(e)}")
-            return {
-                "status": "error",
-                "timestamp": datetime.now().isoformat(),
-                "error": str(e)
-            }

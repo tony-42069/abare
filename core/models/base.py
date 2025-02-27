@@ -5,17 +5,20 @@ from datetime import datetime
 from typing import Optional, Dict, Any
 from pydantic import BaseModel, Field
 
+from core.utils import PydanticObjectId
+
 class MongoModel(BaseModel):
     """Base model with MongoDB ID field."""
-    id: Optional[str] = Field(None, alias="_id")
+    id: Optional[PydanticObjectId] = Field(None, alias="_id")
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
     
-    class Config:
-        allow_population_by_field_name = True
-        json_encoders = {
+    model_config = {
+        "populate_by_name": True,
+        "json_encoders": {
             datetime: lambda dt: dt.isoformat()
         }
+    }
 
 class Status:
     """Status constants for various models."""

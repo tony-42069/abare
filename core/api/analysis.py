@@ -11,6 +11,7 @@ from bson import ObjectId
 from core.models.analysis import Analysis, AIInsight
 from core.models.document import Document
 from core.services.financial_analysis import FinancialAnalysis
+from core.utils import serialize_object_id
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -26,10 +27,11 @@ async def create_analysis(
     """Create a new analysis."""
     try:
         # Insert analysis record
-        result = await db.analyses.insert_one(analysis_data.dict(by_alias=True))
-        analysis_data.id = str(result.inserted_id)
+        result = await db.analysis.insert_one(analysis_data.dict(by_alias=True))
         
-        return analysis_data
+        # Retrieve the inserted document
+        created_analysis = await db.analysis.find_one({"_id": result.inserted_id})
+        return serialize_object_id(created_analysis)
         
     except Exception as e:
         logger.error(f"Error creating analysis: {str(e)}")
@@ -45,10 +47,10 @@ async def get_analysis(
 ):
     """Get analysis by ID."""
     try:
-        analysis = await db.analyses.find_one({"_id": ObjectId(analysis_id)})
+        analysis = await db.analysis.find_one({"_id": ObjectId(analysis_id)})
         if not analysis:
             raise HTTPException(status_code=404, detail="Analysis not found")
-        return analysis
+        return serialize_object_id(analysis)
         
     except Exception as e:
         logger.error(f"Error retrieving analysis: {str(e)}")
@@ -58,25 +60,21 @@ async def get_analysis(
         )
 
 @router.get("/property/{property_id}", response_model=List[Analysis])
-async def get_property_analyses(
+async def list_property_analyses(
     property_id: str,
-    skip: int = 0,
-    limit: int = 10,
     db: AsyncIOMotorDatabase = Depends(get_database)
 ):
-    """Get all analyses for a property."""
+    """List analyses for a specific property."""
     try:
-        cursor = db.analyses.find(
-            {"property_id": property_id}
-        ).skip(skip).limit(limit)
-        analyses = await cursor.to_list(length=limit)
-        return analyses
+        cursor = db.analysis.find({"property_id": property_id})
+        analyses = await cursor.to_list(length=100)
+        return [serialize_object_id(analysis) for analysis in analyses]
         
     except Exception as e:
-        logger.error(f"Error retrieving property analyses: {str(e)}")
+        logger.error(f"Error listing property analyses: {str(e)}")
         raise HTTPException(
             status_code=500,
-            detail=f"Error retrieving property analyses: {str(e)}"
+            detail=f"Error listing property analyses: {str(e)}"
         )
 
 @router.post("/property/{property_id}/insights")
@@ -124,7 +122,7 @@ async def generate_insights(
         )
         
         # Save analysis
-        result = await db.analyses.insert_one(analysis.dict(by_alias=True))
+        result = await db.analysis.insert_one(analysis.dict(by_alias=True))
         analysis.id = str(result.inserted_id)
         
         return analysis
@@ -143,7 +141,7 @@ async def delete_analysis(
 ):
     """Delete analysis by ID."""
     try:
-        result = await db.analyses.delete_one({"_id": ObjectId(analysis_id)})
+        result = await db.analysis.delete_one({"_id": ObjectId(analysis_id)})
         if result.deleted_count == 0:
             raise HTTPException(status_code=404, detail="Analysis not found")
         

@@ -3,8 +3,9 @@ import {
   TenantProfile,
   LeaseRisk,
   TenantConcentration,
-  CreditRiskAnalysis
-} from '@abare/core';
+  CreditRiskAnalysis,
+  IndustryType
+} from './core-types';
 import {
   CreditRiskFactors,
   CreditRiskWeights,
@@ -58,144 +59,97 @@ function calculateWeightedScore(
 }
 
 /**
- * Calculate market adjustment factor based on current market conditions
+ * Get industry risk factor based on industry type
  */
-function calculateMarketAdjustment(
-  baseScore: number,
-  marketConditions: number
-): number {
-  const adjustment = (marketConditions - 0.5) * 0.2; // +/- 10% adjustment
-  return baseScore * (1 + adjustment);
-}
-
-/**
- * Calculate tenant concentration metrics
- */
-function calculateConcentration(
-  tenantRent: number,
-  totalRent: number,
-  tenantSqFt: number,
-  totalSqFt: number,
-  industryExposure: number
-): TenantConcentration {
-  return {
-    tenantId: '', // Will be set by caller
-    squareFootage: tenantSqFt,
-    percentOfTotal: (tenantSqFt / totalSqFt) * 100,
-    annualRent: tenantRent * 12,
-    percentOfRevenue: (tenantRent * 12 / (totalRent * 12)) * 100,
-    industryExposure
+function getIndustryRiskFactor(industry: IndustryType): number {
+  const industryRiskMap: Record<IndustryType, number> = {
+    [IndustryType.Technology]: 0.85,
+    [IndustryType.Finance]: 0.80,
+    [IndustryType.Healthcare]: 0.90,
+    [IndustryType.Retail]: 0.70,
+    [IndustryType.Manufacturing]: 0.75,
+    [IndustryType.Professional]: 0.85,
+    [IndustryType.Government]: 0.95,
+    [IndustryType.Other]: 0.65
   };
-}
-
-/**
- * Calculate lease risk metrics
- */
-function calculateLeaseRisk(
-  lease: {
-    termRemaining: number;
-    monthlyRent: number;
-    squareFeet: number;
-    escalations: number;
-    securityDeposit: number;
-  },
-  marketRent: number,
-  creditRiskLevel: CreditRiskLevel
-): LeaseRisk {
-  const rentPerSqFt = lease.monthlyRent * 12 / lease.squareFeet;
-  const marketRentPerSqFt = marketRent * 12;
-  const marketRentDelta = ((rentPerSqFt - marketRentPerSqFt) / marketRentPerSqFt) * 100;
-
-  // Calculate default probability based on credit risk level and lease terms
-  const baseDefaultProb = {
-    [CreditRiskLevel.Low]: 0.02,
-    [CreditRiskLevel.Moderate]: 0.05,
-    [CreditRiskLevel.High]: 0.10,
-    [CreditRiskLevel.Severe]: 0.20
-  }[creditRiskLevel];
-
-  // Adjust for lease term and market rent delta
-  const termAdjustment = Math.max(0, (60 - lease.termRemaining) / 60) * 0.05;
-  const rentAdjustment = Math.max(0, marketRentDelta / 100) * 0.05;
   
-  return {
-    id: '', // Will be set by caller
-    tenantId: '', // Will be set by caller
-    leaseTermRemaining: lease.termRemaining,
-    monthlyRent: lease.monthlyRent,
-    rentPerSqFt,
-    escalations: lease.escalations,
-    securityDeposit: lease.securityDeposit,
-    defaultProbability: baseDefaultProb + termAdjustment + rentAdjustment,
-    marketRentDelta,
-    creditRiskLevel
-  };
+  return industryRiskMap[industry] || 0.65;
 }
 
 /**
- * Calculate portfolio impact metrics
- */
-function calculatePortfolioImpact(
-  tenantConcentrations: TenantConcentration[],
-  propertyCount: number
-): PropertyCreditAnalysis['portfolioImpact'] {
-  // Calculate Herfindahl-Hirschman Index for concentration
-  const hhi = tenantConcentrations.reduce(
-    (sum, tc) => sum + Math.pow(tc.percentOfRevenue / 100, 2),
-    0
-  );
-
-  // Calculate diversification benefit (inverse of concentration)
-  const diversificationBenefit = Math.max(0, (1 - hhi) * 0.15);
-
-  // Calculate concentration penalty
-  const concentrationPenalty = Math.min(0.15, hhi * 0.3);
-
-  return {
-    diversificationBenefit,
-    concentrationPenalty,
-    netRiskAdjustment: diversificationBenefit - concentrationPenalty
-  };
-}
-
-/**
- * Calculate tenant risk profile including market comparisons
+ * Calculate tenant credit risk based on tenant profile
  */
 export function calculateTenantRiskProfile(
   tenant: TenantProfile,
-  lease: {
-    termRemaining: number;
-    monthlyRent: number;
-    squareFeet: number;
-    escalations: number;
-    securityDeposit: number;
-  },
-  marketContext: {
-    marketRent: number;
+  leaseRisk: LeaseRisk,
+  concentration: TenantConcentration,
+  marketData: {
     industryGrowth: number;
-    marketShare: number;
-  },
-  propertyMetrics: {
-    totalRent: number;
-    totalSqFt: number;
-    industryExposure: number;
+    marketRent: number;
+    vacancyRate: number;
+    economicIndex: number;
   }
 ): TenantRiskProfile {
-  // Calculate base credit risk factors
+  // Calculate risk factors (0-1 scale, higher is better)
+  const industryRisk = getIndustryRiskFactor(tenant.industry);
+  
+  const marketPosition = Math.min(
+    0.95,
+    (tenant.annualRevenue || 0) / 10000000 * 0.5 + 
+    (tenant.publicCompany ? 0.2 : 0) +
+    (tenant.yearsInBusiness / 20) * 0.3
+  );
+  
+  const financialStrength = Math.min(
+    1,
+    ((tenant.creditScore || 600) - 500) / 300
+  );
+  
+  const operatingHistory = Math.min(
+    0.95,
+    tenant.yearsInBusiness / 15
+  );
+  
+  const paymentHistory = 0.85; // Placeholder - would need payment data
+  
+  const marketConditions = (
+    marketData.industryGrowth * 0.3 +
+    (1 - marketData.vacancyRate) * 0.3 +
+    marketData.economicIndex * 0.4
+  );
+  
+  // Compile risk factors
   const factors: CreditRiskFactors = {
-    industryRisk: tenant.industry === 'government' ? 0.9 : 0.7,
-    marketPosition: tenant.publicCompany ? 0.8 : 0.6,
-    financialStrength: tenant.annualRevenue ? Math.min(0.9, tenant.annualRevenue / 1000000000) : 0.5,
-    operatingHistory: Math.min(0.9, tenant.yearsInBusiness / 20),
-    paymentHistory: 0.8, // Would come from actual payment data
-    marketConditions: 0.7 // Would come from market analysis
+    industryRisk,
+    marketPosition,
+    financialStrength,
+    operatingHistory,
+    paymentHistory,
+    marketConditions
   };
-
-  // Calculate credit risk
+  
+  // Calculate base risk score
   const baseScore = calculateWeightedScore(factors);
-  const adjustedScore = calculateMarketAdjustment(baseScore, factors.marketConditions);
+  
+  // Apply adjustments
+  const leaseAdjustment = leaseRisk.leaseTermRemaining > 5 ? 5 : 
+                       leaseRisk.leaseTermRemaining < 1 ? -10 : 0;
+  
+  const concentrationAdjustment = concentration.percentOfRevenue > 0.3 ? -10 : 
+                              concentration.percentOfRevenue > 0.2 ? -5 : 0;
+  
+  const marketAdjustment = leaseRisk.marketRentDelta > 0.2 ? -5 :
+                        leaseRisk.marketRentDelta < -0.1 ? 5 : 0;
+  
+  // Calculate adjusted score
+  const adjustedScore = Math.min(100, Math.max(0, 
+    baseScore + leaseAdjustment + concentrationAdjustment + marketAdjustment
+  ));
+  
+  // Determine risk level
   const riskLevel = calculateRiskLevel(adjustedScore);
-
+  
+  // Create credit risk calculation
   const creditRisk: CreditRiskCalculation = {
     tenantId: tenant.id,
     factors,
@@ -203,257 +157,183 @@ export function calculateTenantRiskProfile(
     baseScore,
     adjustedScore,
     riskLevel,
-    confidenceLevel: 0.85
+    confidenceLevel: 0.85 // Confidence in the assessment
   };
-
-  // Calculate lease risk
-  const leaseRisk = calculateLeaseRisk(lease, marketContext.marketRent, riskLevel);
-  leaseRisk.tenantId = tenant.id;
-
-  // Calculate concentration
-  const concentration = calculateConcentration(
-    lease.monthlyRent,
-    propertyMetrics.totalRent,
-    lease.squareFeet,
-    propertyMetrics.totalSqFt,
-    propertyMetrics.industryExposure
-  );
-  concentration.tenantId = tenant.id;
-
+  
+  // Calculate market comparison metrics
+  const marketComparison = {
+    rentDelta: leaseRisk.marketRentDelta,
+    industryPerformance: marketData.industryGrowth,
+    marketShare: 0.05, // Placeholder - would need market data
+    growthRate: 0.03 // Placeholder - would need historical data
+  };
+  
+  // Return complete tenant risk profile
   return {
     ...tenant,
     creditRisk,
     leaseRisk,
     concentration,
-    marketComparison: {
-      rentDelta: leaseRisk.marketRentDelta,
-      industryPerformance: marketContext.industryGrowth,
-      marketShare: marketContext.marketShare,
-      growthRate: 0.05 // Would come from financial analysis
-    }
+    marketComparison
   };
 }
 
 /**
- * Calculate property-level credit analysis
+ * Calculate property credit analysis based on tenant profiles
  */
 export function calculatePropertyCreditAnalysis(
   propertyId: string,
-  tenants: Array<{
-    profile: TenantProfile;
-    lease: {
-      termRemaining: number;
-      monthlyRent: number;
-      squareFeet: number;
-      escalations: number;
-      securityDeposit: number;
-    };
-    marketContext: {
-      marketRent: number;
-      industryGrowth: number;
-      marketShare: number;
-    };
-  }>,
-  marketMetrics: {
-    industryTrends: Record<string, number>;
-    marketRents: {
-      average: number;
-      median: number;
-      standardDev: number;
-    };
-    vacancyRates: {
-      market: number;
-      submarket: number;
-      property: number;
-    };
+  tenants: TenantProfile[],
+  leaseRisks: LeaseRisk[],
+  concentrations: TenantConcentration[],
+  marketData: {
+    industryGrowth: Record<IndustryType, number>;
+    marketRent: number;
+    vacancyRate: number;
+    economicIndex: number;
   }
 ): PropertyCreditAnalysis {
-  // Calculate total property metrics
-  const totalRent = tenants.reduce((sum, t) => sum + t.lease.monthlyRent, 0);
-  const totalSqFt = tenants.reduce((sum, t) => sum + t.lease.squareFeet, 0);
+  // Check for empty data
+  if (tenants.length === 0 || leaseRisks.length === 0 || concentrations.length === 0) {
+    throw new Error('Cannot calculate credit analysis with empty data');
+  }
   
-  // Calculate industry exposure
-  const industryExposure = new Map<string, number>();
-  tenants.forEach(t => {
-    const exposure = (t.lease.monthlyRent / totalRent) * 100;
-    industryExposure.set(t.profile.industry, 
-      (industryExposure.get(t.profile.industry) || 0) + exposure);
-  });
-
-  // Calculate tenant risk profiles
-  const tenantProfiles = tenants.map(t => calculateTenantRiskProfile(
-    t.profile,
-    t.lease,
-    t.marketContext,
-    {
-      totalRent,
-      totalSqFt,
-      industryExposure: industryExposure.get(t.profile.industry) || 0
+  // Calculate risk profile for each tenant
+  const tenantProfiles: TenantRiskProfile[] = tenants.map(tenant => {
+    const leaseRisk = leaseRisks.find(lr => lr.tenantId === tenant.id);
+    const concentration = concentrations.find(c => c.tenantId === tenant.id);
+    
+    if (!leaseRisk || !concentration) {
+      throw new Error(`Missing lease risk or concentration data for tenant ${tenant.id}`);
     }
-  ));
-
-  // Calculate portfolio impact
-  const portfolioImpact = calculatePortfolioImpact(
-    tenantProfiles.map(tp => tp.concentration),
-    tenants.length
-  );
-
+    
+    return calculateTenantRiskProfile(
+      tenant,
+      leaseRisk,
+      concentration,
+      {
+        industryGrowth: marketData.industryGrowth[tenant.industry] || 0.02,
+        marketRent: marketData.marketRent,
+        vacancyRate: marketData.vacancyRate,
+        economicIndex: marketData.economicIndex
+      }
+    );
+  });
+  
   // Calculate weighted average lease length
-  const weightedAverageLeaseLength = tenantProfiles.reduce(
-    (sum, tp) => sum + (tp.leaseRisk.leaseTermRemaining * (tp.concentration.percentOfRevenue / 100)),
-    0
-  );
-
-  // Calculate total default risk
-  const totalDefaultRisk = tenantProfiles.reduce(
-    (sum, tp) => sum + (tp.leaseRisk.defaultProbability * (tp.concentration.percentOfRevenue / 100)),
-    0
-  );
-
-  // Determine overall risk level
-  const overallRiskLevel = calculateRiskLevel(
-    100 - (totalDefaultRisk * 100) + portfolioImpact.netRiskAdjustment
-  );
-
+  const totalRent = leaseRisks.reduce((sum, lease) => sum + lease.monthlyRent, 0);
+  const weightedAverageLeaseLength = leaseRisks.reduce((sum, lease) => {
+    const weight = lease.monthlyRent / totalRent;
+    return sum + (lease.leaseTermRemaining * weight);
+  }, 0);
+  
+  // Calculate total default risk (weighted by rent)
+  const totalDefaultRisk = leaseRisks.reduce((sum, lease) => {
+    const weight = lease.monthlyRent / totalRent;
+    return sum + (lease.defaultProbability * weight);
+  }, 0);
+  
+  // Calculate market volatility based on market conditions
+  const marketVolatility = 0.15; // Placeholder - would need historical data
+  
+  // Calculate overall risk level based on tenant profiles
+  const overallRiskScore = tenantProfiles.reduce((sum, profile) => {
+    const weight = profile.concentration.percentOfRevenue;
+    return sum + (profile.creditRisk.adjustedScore * weight);
+  }, 0);
+  
+  const overallRiskLevel = calculateRiskLevel(overallRiskScore);
+  
+  // Calculate portfolio impact
+  const diversificationBenefit = Math.min(10, tenantProfiles.length);
+  const concentrationPenalty = concentrations.some(c => c.percentOfRevenue > 0.3) ? 15 : 
+                            concentrations.some(c => c.percentOfRevenue > 0.2) ? 10 : 5;
+  const netRiskAdjustment = diversificationBenefit - concentrationPenalty;
+  
+  // Generate industry trends
+  const industryTrends: Record<string, number> = {};
+  Object.values(IndustryType).forEach(industry => {
+    industryTrends[industry] = marketData.industryGrowth[industry as IndustryType] || 0.02;
+  });
+  
+  // Generate market context
+  const marketContext = {
+    industryTrends,
+    marketRents: {
+      average: marketData.marketRent,
+      median: marketData.marketRent * 0.98, // Placeholder
+      standardDev: marketData.marketRent * 0.1 // Placeholder
+    },
+    vacancyRates: {
+      market: marketData.vacancyRate,
+      submarket: marketData.vacancyRate * 0.9, // Placeholder
+      property: leaseRisks.length > 0 ? 0 : 1 // Simplified - would need property data
+    }
+  };
+  
   // Generate recommendations
   const recommendations = {
-    riskMitigation: generateRiskMitigationRecommendations(tenantProfiles, overallRiskLevel),
-    tenantRetention: generateTenantRetentionRecommendations(tenantProfiles),
-    leaseStructure: generateLeaseStructureRecommendations(tenantProfiles),
-    portfolioBalance: generatePortfolioBalanceRecommendations(tenantProfiles, portfolioImpact)
+    riskMitigation: [] as string[],
+    tenantRetention: [] as string[],
+    leaseStructure: [] as string[],
+    portfolioBalance: [] as string[]
   };
-
+  
+  // Add risk mitigation recommendations
+  if (overallRiskLevel === CreditRiskLevel.High || overallRiskLevel === CreditRiskLevel.Severe) {
+    recommendations.riskMitigation.push('Consider requiring additional security deposits from high-risk tenants');
+    recommendations.riskMitigation.push('Implement more frequent financial monitoring of tenants');
+  }
+  
+  // Add tenant retention recommendations
+  const highValueTenants = tenantProfiles.filter(tp => 
+    tp.creditRisk.riskLevel === CreditRiskLevel.Low && 
+    tp.concentration.percentOfRevenue > 0.1
+  );
+  
+  if (highValueTenants.length > 0) {
+    recommendations.tenantRetention.push('Develop retention strategy for high-value tenants with good credit');
+    recommendations.tenantRetention.push('Consider early lease renewal offers to secure long-term tenancy');
+  }
+  
+  // Add lease structure recommendations
+  if (weightedAverageLeaseLength < 3) {
+    recommendations.leaseStructure.push('Work to extend average lease terms to reduce rollover risk');
+    recommendations.leaseStructure.push('Consider offering incentives for longer lease commitments');
+  }
+  
+  // Add portfolio balance recommendations
+  const highConcentrationIndustries = Object.entries(
+    tenantProfiles.reduce((acc, tp) => {
+      const industry = tp.industry;
+      acc[industry] = (acc[industry] || 0) + tp.concentration.percentOfRevenue;
+      return acc;
+    }, {} as Record<string, number>)
+  ).filter(([_, value]) => value > 0.3);
+  
+  if (highConcentrationIndustries.length > 0) {
+    recommendations.portfolioBalance.push('Reduce concentration in high-exposure industries');
+    recommendations.portfolioBalance.push('Target diversification across multiple industry sectors');
+  }
+  
   return {
-    id: '', // Will be set by caller
+    id: `cra-${Date.now()}`,
     propertyId,
     overallRiskLevel,
-    tenantRisks: tenantProfiles.map(tp => tp.leaseRisk),
-    concentrationRisk: tenantProfiles.map(tp => tp.concentration),
+    tenantRisks: leaseRisks,
+    concentrationRisk: concentrations,
     weightedAverageLeaseLength,
     totalDefaultRisk,
-    marketVolatility: marketMetrics.marketRents.standardDev / marketMetrics.marketRents.average,
-    tenantProfiles,
-    portfolioImpact,
-    marketContext: {
-      industryTrends: marketMetrics.industryTrends,
-      marketRents: marketMetrics.marketRents,
-      vacancyRates: marketMetrics.vacancyRates
-    },
-    recommendations,
+    marketVolatility,
     createdAt: new Date(),
-    updatedAt: new Date()
+    updatedAt: new Date(),
+    tenantProfiles,
+    portfolioImpact: {
+      diversificationBenefit,
+      concentrationPenalty,
+      netRiskAdjustment
+    },
+    marketContext,
+    recommendations
   };
-}
-
-// Helper functions for generating recommendations
-function generateRiskMitigationRecommendations(
-  tenantProfiles: TenantRiskProfile[],
-  overallRiskLevel: CreditRiskLevel
-): string[] {
-  const recommendations: string[] = [];
-
-  const highRiskTenants = tenantProfiles.filter(
-    tp => tp.creditRisk.riskLevel === CreditRiskLevel.High || 
-         tp.creditRisk.riskLevel === CreditRiskLevel.Severe
-  );
-
-  if (highRiskTenants.length > 0) {
-    recommendations.push(
-      `Consider increasing security deposits for ${highRiskTenants.length} high-risk tenants`
-    );
-  }
-
-  if (overallRiskLevel === CreditRiskLevel.High || overallRiskLevel === CreditRiskLevel.Severe) {
-    recommendations.push('Implement more frequent financial monitoring of tenants');
-    recommendations.push('Consider credit default insurance for high-risk leases');
-  }
-
-  return recommendations;
-}
-
-function generateTenantRetentionRecommendations(
-  tenantProfiles: TenantRiskProfile[]
-): string[] {
-  const recommendations: string[] = [];
-
-  const nearTermExpirations = tenantProfiles.filter(
-    tp => tp.leaseRisk.leaseTermRemaining < 24 && 
-         tp.creditRisk.riskLevel !== CreditRiskLevel.Severe
-  );
-
-  if (nearTermExpirations.length > 0) {
-    recommendations.push(
-      `Initiate renewal discussions with ${nearTermExpirations.length} tenants expiring within 24 months`
-    );
-  }
-
-  const aboveMarketTenants = tenantProfiles.filter(
-    tp => tp.marketComparison.rentDelta > 10
-  );
-
-  if (aboveMarketTenants.length > 0) {
-    recommendations.push(
-      'Develop retention strategies for tenants paying above-market rents'
-    );
-  }
-
-  return recommendations;
-}
-
-function generateLeaseStructureRecommendations(
-  tenantProfiles: TenantRiskProfile[]
-): string[] {
-  const recommendations: string[] = [];
-
-  const lowEscalations = tenantProfiles.filter(
-    tp => tp.leaseRisk.escalations < 0.02
-  );
-
-  if (lowEscalations.length > 0) {
-    recommendations.push(
-      'Consider higher escalations in future lease negotiations'
-    );
-  }
-
-  const lowDeposits = tenantProfiles.filter(
-    tp => tp.leaseRisk.securityDeposit < tp.leaseRisk.monthlyRent * 2
-  );
-
-  if (lowDeposits.length > 0) {
-    recommendations.push(
-      'Evaluate security deposit requirements for future leases'
-    );
-  }
-
-  return recommendations;
-}
-
-function generatePortfolioBalanceRecommendations(
-  tenantProfiles: TenantRiskProfile[],
-  portfolioImpact: PropertyCreditAnalysis['portfolioImpact']
-): string[] {
-  const recommendations: string[] = [];
-
-  if (portfolioImpact.concentrationPenalty > 0.1) {
-    recommendations.push(
-      'Consider diversifying tenant mix to reduce concentration risk'
-    );
-  }
-
-  const industries = new Map<string, number>();
-  tenantProfiles.forEach(tp => {
-    industries.set(tp.industry, 
-      (industries.get(tp.industry) || 0) + tp.concentration.percentOfRevenue);
-  });
-
-  const dominantIndustry = Array.from(industries.entries())
-    .reduce((a, b) => a[1] > b[1] ? a : b);
-
-  if (dominantIndustry[1] > 40) {
-    recommendations.push(
-      `Consider reducing exposure to ${dominantIndustry[0]} industry (currently ${dominantIndustry[1].toFixed(1)}%)`
-    );
-  }
-
-  return recommendations;
 }

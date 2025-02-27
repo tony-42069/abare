@@ -7,7 +7,7 @@ import {
   LeaseRisk,
   TenantConcentration,
   CreditRiskAnalysis
-} from '@abare/core';
+} from './core-types';
 
 // Credit Risk Calculation Types
 export interface CreditRiskFactors {

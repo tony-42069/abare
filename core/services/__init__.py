@@ -1,4 +1,4 @@
 """
-Core services module for the ABARE platform.
-Integrates functionality from multiple repositories.
+Service modules for the ABARE platform.
 """
+# This file allows Python to import the service modules as packages

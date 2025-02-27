@@ -4,8 +4,13 @@ Main FastAPI application for the ABARE platform.
 import logging
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from motor.motor_asyncio import AsyncIOMotorClient
 import asyncio
+from datetime import datetime
+import sys
+import os
+
+# Add the parent directory to the path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config.settings import (
     PROJECT_NAME,
@@ -14,7 +19,7 @@ from config.settings import (
     MONGODB_URL,
     MONGODB_DB_NAME
 )
-from core.services.task_queue import TaskQueue
+from core.db.in_memory_mongo import InMemoryMongoClient, seed_database
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -23,9 +28,9 @@ logger = logging.getLogger(__name__)
 # Create FastAPI app
 app = FastAPI(
     title=PROJECT_NAME,
-    openapi_url=f"{API_V1_PREFIX}/openapi.json",
-    docs_url=f"{API_V1_PREFIX}/docs",
-    redoc_url=f"{API_V1_PREFIX}/redoc",
+    openapi_url="/openapi.json",
+    docs_url="/docs",
+    redoc_url="/redoc",
 )
 
 # Add CORS middleware
@@ -37,20 +42,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# MongoDB and Task Queue initialization
+# MongoDB initialization
 @app.on_event("startup")
 async def startup_services():
     try:
-        # Initialize MongoDB connection
-        app.mongodb_client = AsyncIOMotorClient(MONGODB_URL)
-        app.mongodb = app.mongodb_client[MONGODB_DB_NAME]
+        # Initialize in-memory MongoDB connection
+        app.mongodb_client = InMemoryMongoClient()
+        app.mongodb = app.mongodb_client["abare_db"]
         
-        # Initialize task queue
-        app.task_queue = TaskQueue(app.mongodb)
+        # Seed the database with sample data
+        await seed_database(app.mongodb)
         
-        # Test MongoDB connection
-        await app.mongodb.command("ping")
-        logger.info("Connected to MongoDB and initialized task queue")
+        logger.info("Connected to MongoDB and initialized database")
         
     except Exception as e:
         logger.error(f"Failed to initialize services: {str(e)}")
@@ -58,15 +61,9 @@ async def startup_services():
 
 @app.on_event("shutdown")
 async def shutdown_services():
-    # Close MongoDB connection
-    app.mongodb_client.close()
-    
-    # Cancel any running tasks
-    if hasattr(app, 'task_queue'):
-        tasks = list(app.task_queue.tasks.values())
-        if tasks:
-            logger.info(f"Cancelling {len(tasks)} running tasks")
-            await asyncio.gather(*[app.task_queue.cancel_task(task_id) for task_id in list(app.task_queue.tasks.keys())])
+    # Close MongoDB connection if needed
+    if hasattr(app, 'mongodb_client'):
+        app.mongodb_client.close()
     
     logger.info("Shut down all services")
 
@@ -77,18 +74,11 @@ async def health_check():
         # Check MongoDB connection
         await app.mongodb.command("ping")
         
-        # Get task queue stats
-        active_tasks = len(app.task_queue.tasks)
-        
         return {
             "status": "healthy",
             "services": {
                 "api": "up",
-                "database": "up",
-                "task_queue": {
-                    "status": "up",
-                    "active_tasks": active_tasks
-                }
+                "database": "up"
             }
         }
     except Exception as e:
@@ -100,21 +90,22 @@ async def health_check():
 # Import and include API routers
 from core.api import documents, properties, analysis
 
+# Use paths that match frontend expectations
 app.include_router(
     documents.router,
-    prefix=f"{API_V1_PREFIX}/documents",
+    prefix="/api/documents",
     tags=["documents"]
 )
 
 app.include_router(
     properties.router,
-    prefix=f"{API_V1_PREFIX}/properties",
+    prefix="/api/properties",
     tags=["properties"]
 )
 
 app.include_router(
     analysis.router,
-    prefix=f"{API_V1_PREFIX}/analysis",
+    prefix="/api/analysis",
     tags=["analysis"]
 )
 

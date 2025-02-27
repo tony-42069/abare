@@ -6,15 +6,18 @@
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {
-    "build": "tsc",
-    "clean": "rmdir /s /q dist",
-    "lint": "eslint \"src/**/*.ts\""
+    "build": "npx -p typescript tsc",
+    "clean": "rm -rf dist",
+    "lint": "eslint \"src/**/*.ts\"",
+    "typecheck": "npx -p typescript tsc --noEmit"
   },
   "dependencies": {
     "date-fns": "2.30.0"
   },
   "devDependencies": {
     "@types/date-fns": "2.6.0",
+    "@abare/typescript-config": "workspace:*",
+    "@abare/eslint-config": "workspace:*",
     "eslint": "8.56.0",
     "typescript": "5.3.3"
   }

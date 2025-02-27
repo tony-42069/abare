@@ -45,12 +45,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 # Validate required settings
-required_settings = [
-    "AZURE_OPENAI_API_KEY",
-    "AZURE_OPENAI_ENDPOINT",
-    "AZURE_OPENAI_DEPLOYMENT_NAME",
-    "AZURE_OPENAI_EMBEDDING_DEPLOYMENT_NAME",
-]
+required_settings = []  # Remove Azure OpenAI validation
 
 missing_settings = [setting for setting in required_settings if not globals().get(setting)]
 if missing_settings:

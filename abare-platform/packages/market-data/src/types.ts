@@ -1,5 +1,3 @@
-import { z } from 'zod';
-
 // Base types
 export interface BaseRate {
   date: Date;
@@ -11,14 +9,16 @@ export interface TreasuryRate extends BaseRate {
   term: number; // years
 }
 
-export const treasuryRateSchema = z.object({
-  date: z.date(),
-  rate: z.number(),
-  term: z.number().int().positive()
-});
-
 export function isTreasuryRate(data: any): data is TreasuryRate {
-  return treasuryRateSchema.safeParse(data).success;
+  return (
+    data &&
+    typeof data === 'object' &&
+    data.date instanceof Date &&
+    typeof data.rate === 'number' &&
+    typeof data.term === 'number' &&
+    Number.isInteger(data.term) &&
+    data.term > 0
+  );
 }
 
 // SOFR Rate types
@@ -26,14 +26,14 @@ export interface SofrRate extends BaseRate {
   term: string; // e.g., '30D', '90D', '180D'
 }
 
-export const sofrRateSchema = z.object({
-  date: z.date(),
-  rate: z.number(),
-  term: z.string()
-});
-
 export function isSofrRate(data: any): data is SofrRate {
-  return sofrRateSchema.safeParse(data).success;
+  return (
+    data &&
+    typeof data === 'object' &&
+    data.date instanceof Date &&
+    typeof data.rate === 'number' &&
+    typeof data.term === 'string'
+  );
 }
 
 // Market Spread types
@@ -42,21 +42,21 @@ export interface MarketSpread {
   propertyType: string;
   loanType: string;
   spread: number; // basis points
-  baseRate: string; // 'SOFR' or 'Treasury'
+  baseRate: 'SOFR' | 'Treasury';
   term: string;
 }
 
-export const marketSpreadSchema = z.object({
-  date: z.date(),
-  propertyType: z.string(),
-  loanType: z.string(),
-  spread: z.number(),
-  baseRate: z.enum(['SOFR', 'Treasury']),
-  term: z.string()
-});
-
 export function isMarketSpread(data: any): data is MarketSpread {
-  return marketSpreadSchema.safeParse(data).success;
+  return (
+    data &&
+    typeof data === 'object' &&
+    data.date instanceof Date &&
+    typeof data.propertyType === 'string' &&
+    typeof data.loanType === 'string' &&
+    typeof data.spread === 'number' &&
+    (data.baseRate === 'SOFR' || data.baseRate === 'Treasury') &&
+    typeof data.term === 'string'
+  );
 }
 
 // Cap Rate types
@@ -67,15 +67,15 @@ export interface CapRate {
   rate: number;
 }
 
-export const capRateSchema = z.object({
-  date: z.date(),
-  propertyType: z.string(),
-  market: z.string(),
-  rate: z.number()
-});
-
 export function isCapRate(data: any): data is CapRate {
-  return capRateSchema.safeParse(data).success;
+  return (
+    data &&
+    typeof data === 'object' &&
+    data.date instanceof Date &&
+    typeof data.propertyType === 'string' &&
+    typeof data.market === 'string' &&
+    typeof data.rate === 'number'
+  );
 }
 
 // Historical Data types

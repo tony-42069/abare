@@ -10,6 +10,7 @@ from bson import ObjectId
 
 from core.models.property import Property, Address, FinancialMetrics
 from core.services.financial_analysis import FinancialAnalysis
+from core.utils import serialize_object_id
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -47,7 +48,7 @@ async def get_property(
         property_data = await db.properties.find_one({"_id": ObjectId(property_id)})
         if not property_data:
             raise HTTPException(status_code=404, detail="Property not found")
-        return property_data
+        return serialize_object_id(property_data)
         
     except Exception as e:
         logger.error(f"Error retrieving property: {str(e)}")
@@ -67,6 +68,10 @@ async def list_properties(
 ):
     """List properties with filtering and pagination."""
     try:
+        # Debug logging
+        logger.info(f"Listing properties with filters: property_type={property_type}, min_value={min_value}, max_value={max_value}")
+        logger.info(f"MongoDB database: {db}")
+        
         # Build query filter
         filter_query = {}
         if property_type:
@@ -79,12 +84,30 @@ async def list_properties(
             else:
                 filter_query["financial_metrics.property_value"] = {"$lte": max_value}
         
+        logger.info(f"Using filter query: {filter_query}")
+        
+        # Test database connection
+        try:
+            await db.command("ping")
+            logger.info("MongoDB connection test successful")
+        except Exception as db_error:
+            logger.error(f"MongoDB connection test failed: {str(db_error)}")
+            raise
+        
         cursor = db.properties.find(filter_query).skip(skip).limit(limit)
         properties = await cursor.to_list(length=limit)
-        return properties
+        
+        logger.info(f"Found {len(properties)} properties")
+        
+        # Apply serialization to each property
+        serialized_properties = [serialize_object_id(prop) for prop in properties]
+        return serialized_properties
         
     except Exception as e:
         logger.error(f"Error listing properties: {str(e)}")
+        # Print more detailed error information
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
         raise HTTPException(
             status_code=500,
             detail=f"Error listing properties: {str(e)}"

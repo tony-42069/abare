@@ -1,4 +1,4 @@
- - """
+"""
 Analysis models for the ABARE platform.
 """
 from typing import Optional, List, Dict, Any
@@ -67,8 +67,9 @@ class Analysis(MongoModel):
     confidence_score: float = Field(ge=0, le=1)
     metadata: Metadata = Field(default_factory=Metadata)
     
-    class Config:
-        schema_extra = {
+    model_config = {
+        "populate_by_name": True,
+        "json_schema_extra": {
             "example": {
                 "property_id": "123456",
                 "analysis_type": "comprehensive",
@@ -90,3 +91,4 @@ class Analysis(MongoModel):
                 }
             }
         }
+    }

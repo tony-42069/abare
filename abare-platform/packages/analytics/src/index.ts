@@ -25,15 +25,16 @@ import {
   TenantProfile,
   LeaseRisk,
   TenantConcentration,
-  CreditRiskAnalysis
-} from '@abare/core';
+  CreditRiskAnalysis,
+  IndustryType
+} from './core-types';
 import {
   MarketSpread,
   RateEnvironment,
   assessMarketRisk,
   analyzeSpread,
   HistoricalData
-} from '@abare/market-data';
+} from './market-data-types';
 
 // Credit Risk Analysis Functions
 import {
@@ -48,65 +49,87 @@ export {
 
 // Financial Analysis Functions
 export function calculateFinancialMetrics(
+  propertyValue: number,
   noi: number,
-  purchasePrice: number,
   debtService: number,
   operatingExpenses: number,
-  totalRevenue: number
+  loanAmount: number,
+  breakEvenOccupancy: number
 ): FinancialMetrics {
+  // Calculate key financial metrics
+  const capRate = (noi / propertyValue) * 100;
+  const irr = 8.5; // Simplified - would need cash flow projections
+  const cashOnCash = ((noi - debtService) / (propertyValue - loanAmount)) * 100;
+  const debtServiceCoverage = noi / debtService;
+  const loanToValue = (loanAmount / propertyValue) * 100;
+  const operatingExpenseRatio = (operatingExpenses / noi) * 100;
+
   return {
     noi,
-    capRate: (noi / purchasePrice) * 100,
-    irr: calculateIRR(noi, purchasePrice),
-    cashOnCash: calculateCashOnCash(noi, debtService, purchasePrice),
-    debtServiceCoverage: noi / debtService,
-    loanToValue: calculateLTV(purchasePrice),
-    operatingExpenseRatio: (operatingExpenses / totalRevenue) * 100,
-    breakEvenOccupancy: calculateBreakEven(operatingExpenses, totalRevenue)
+    capRate,
+    irr,
+    cashOnCash,
+    debtServiceCoverage,
+    loanToValue,
+    operatingExpenseRatio,
+    breakEvenOccupancy
   };
 }
 
-// Investment Analysis Functions
-export function analyzeInvestment(
+export function generateInvestmentAnalysis(
   propertyId: string,
   propertyType: PropertyType,
+  riskProfile: RiskProfile,
   purchasePrice: number,
-  noi: number,
   squareFeet: number,
   occupancyRate: number,
-  marketData: RateEnvironment
+  noi: number,
+  debtService: number,
+  operatingExpenses: number,
+  loanAmount: number,
+  breakEvenOccupancy: number,
+  assumptions: {
+    rentGrowth: number;
+    expenseGrowth: number;
+    vacancyRate: number;
+    capitalReserves: number;
+    holdingPeriod: number;
+    exitCapRate: number;
+  }
 ): InvestmentAnalysis {
   const metrics = calculateFinancialMetrics(
-    noi,
     purchasePrice,
-    calculateDebtService(purchasePrice),
-    calculateOperatingExpenses(squareFeet),
-    calculateTotalRevenue(squareFeet, occupancyRate)
+    noi,
+    debtService,
+    operatingExpenses,
+    loanAmount,
+    breakEvenOccupancy
   );
 
-  const marketRisk = assessMarketRisk(marketData);
-  const riskProfile = determineRiskProfile(metrics, marketRisk.score);
+  const baseIrr = metrics.irr;
+  const bestIrr = baseIrr * 1.2;
+  const worstIrr = baseIrr * 0.8;
 
   return {
+    id: `inv-${Date.now()}`,
     propertyId,
+    type: 'financial',
     propertyType,
     riskProfile,
     purchasePrice,
     squareFeet,
     occupancyRate,
     metrics,
-    assumptions: generateAssumptions(propertyType, marketData),
+    assumptions,
     sensitivity: {
-      capRateRange: [metrics.capRate - 1, metrics.capRate + 1] as [number, number],
-      noiRange: [metrics.noi * 0.9, metrics.noi * 1.1] as [number, number],
+      capRateRange: [metrics.capRate * 0.9, metrics.capRate * 1.1],
+      noiRange: [noi * 0.9, noi * 1.1],
       irrScenarios: {
-        best: metrics.irr * 1.2,
-        base: metrics.irr,
-        worst: metrics.irr * 0.8
+        best: bestIrr,
+        base: baseIrr,
+        worst: worstIrr
       }
     },
-    id: generateAnalysisId(),
-    type: 'financial',
     createdAt: new Date(),
     updatedAt: new Date(),
     status: 'completed',
@@ -114,435 +137,278 @@ export function analyzeInvestment(
   };
 }
 
-// Risk Analysis Functions
-export function analyzeRisk(
+export function generateRiskAnalysis(
   propertyId: string,
   propertyType: PropertyType,
-  marketData: RateEnvironment,
-  locationScore: number,
-  propertyAge: number,
-  tenantData: {
-    profile: TenantProfile;
-    lease: {
-      termRemaining: number;
-      monthlyRent: number;
-      squareFeet: number;
-      escalations: number;
-      securityDeposit: number;
-    };
-    marketContext: {
-      marketRent: number;
-      industryGrowth: number;
-      marketShare: number;
-    };
-    propertyMetrics: {
-      totalRent: number;
-      totalSqFt: number;
-      industryExposure: number;
-    };
+  riskProfile: RiskProfile,
+  marketConditions: {
+    economicGrowth: number;
+    employmentTrends: number;
+    supplyDemand: number;
+    marketLiquidity: number;
+  },
+  tenantFactors: {
+    creditQuality: number;
+    tenantDiversity: number;
+    leaseTerms: number;
+    rolloverExposure: number;
+  },
+  locationFactors: {
+    accessibility: number;
+    demographics: number;
+    submarket: number;
+    amenities: number;
+  },
+  propertyCondition: {
+    age: number;
+    maintenance: number;
+    functionality: number;
+    sustainability: number;
   }
 ): RiskAnalysis {
-  const marketRiskAssessment = assessMarketRisk(marketData);
-  
-  const marketRisk = {
-    score: marketRiskAssessment.score,
-    factors: {
-      economicGrowth: calculateEconomicGrowthScore(marketData),
-      employmentTrends: calculateEmploymentTrendScore(marketData),
-      supplyDemand: calculateSupplyDemandScore(marketData),
-      marketLiquidity: calculateMarketLiquidityScore(marketData)
-    }
+  // Calculate risk scores (0-100, 100 being lowest risk)
+  const calculateScore = (factors: Record<string, number>) => {
+    const values = Object.values(factors);
+    return values.reduce((sum, value) => sum + value, 0) / values.length;
   };
 
-  const tenantRisk = analyzeTenantRiskProfile(tenantData);
-  const locationRisk = analyzeLocationRiskProfile(locationScore);
-  const propertyConditionRisk = analyzePropertyConditionRisk(propertyAge);
+  const marketRiskScore = calculateScore(marketConditions);
+  const tenantRiskScore = calculateScore(tenantFactors);
+  const locationRiskScore = calculateScore(locationFactors);
+  const propertyConditionRiskScore = calculateScore(propertyCondition);
 
-  const overallRisk = calculateOverallRiskScore([
-    marketRisk.score,
-    tenantRisk.score,
-    locationRisk.score,
-    propertyConditionRisk.score
-  ]);
-
-  return {
-    propertyId,
-    propertyType,
-    riskProfile: determineRiskProfile(null, overallRisk),
-    marketRisk,
-    tenantRisk,
-    locationRisk,
-    propertyConditionRisk,
-    overallRisk,
-    recommendations: generateRiskRecommendations(
-      marketRisk,
-      tenantRisk,
-      locationRisk,
-      propertyConditionRisk
-    ),
-    id: generateAnalysisId(),
-    type: 'risk',
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    status: 'completed',
-    version: 1
-  };
-}
-
-// Portfolio Analysis Functions
-export function analyzePortfolio(
-  propertyId: string,
-  properties: InvestmentAnalysis[],
-  marketData: RateEnvironment
-): PortfolioAnalysis {
-  const totalValue = properties.reduce((sum, p) => sum + p.purchasePrice, 0);
-  
-  return {
-    propertyId,
-    properties: properties.map(p => p.id),
-    aggregateMetrics: {
-      totalValue,
-      weightedCapRate: calculateWeightedCapRateForPortfolio(properties),
-      averageOccupancy: calculateAverageOccupancyRate(properties),
-      diversificationScore: calculatePortfolioDiversification(properties)
-    },
-    riskDistribution: calculatePortfolioRiskDistribution(properties),
-    propertyTypeDistribution: calculatePropertyTypeDistribution(properties),
-    correlationMatrix: calculatePropertyCorrelations(properties),
-    id: generateAnalysisId(),
-    type: 'market',
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    status: 'completed',
-    version: 1
-  };
-}
-
-// Market Analysis Helper Functions
-function calculateEconomicGrowthScore(marketData: RateEnvironment): number {
-  const latestSofr = marketData.sofrRates[marketData.sofrRates.length - 1].rate;
-  return Math.max(0, Math.min(1, 1 - (latestSofr / 10))); // Higher rates = lower growth score
-}
-
-function calculateEmploymentTrendScore(marketData: RateEnvironment): number {
-  const spreadTrend = marketData.marketSpreads.slice(-6);
-  const trendSlope = calculateTrendSlope(spreadTrend.map(s => s.spread));
-  return Math.max(0, Math.min(1, 0.5 + trendSlope));
-}
-
-function calculateSupplyDemandScore(marketData: RateEnvironment): number {
-  const recentSpreads = marketData.marketSpreads.slice(-3).map(s => s.spread);
-  const avgSpread = recentSpreads.reduce((a, b) => a + b, 0) / recentSpreads.length;
-  return Math.max(0, Math.min(1, 1 - (avgSpread / 300))); // Lower spreads = better supply/demand
-}
-
-function calculateMarketLiquidityScore(marketData: RateEnvironment): number {
-  const volatility = calculateVolatility(marketData.marketSpreads.map(s => s.spread));
-  return Math.max(0, Math.min(1, 1 - volatility));
-}
-
-// Risk Analysis Helper Functions
-function analyzeTenantRiskProfile(tenantData: {
-  profile: TenantProfile;
-  lease: {
-    termRemaining: number;
-    monthlyRent: number;
-    squareFeet: number;
-    escalations: number;
-    securityDeposit: number;
-  };
-  marketContext: {
-    marketRent: number;
-    industryGrowth: number;
-    marketShare: number;
-  };
-  propertyMetrics: {
-    totalRent: number;
-    totalSqFt: number;
-    industryExposure: number;
-  };
-}) {
-  const tenantRiskProfile = calculateTenantRiskProfile(
-    tenantData.profile,
-    tenantData.lease,
-    tenantData.marketContext,
-    tenantData.propertyMetrics
+  // Calculate overall risk (weighted average)
+  const overallRisk = (
+    marketRiskScore * 0.25 +
+    tenantRiskScore * 0.35 +
+    locationRiskScore * 0.2 +
+    propertyConditionRiskScore * 0.2
   );
 
+  // Generate recommendations based on risk analysis
+  const recommendations: string[] = [];
+
+  if (tenantRiskScore < 70) {
+    recommendations.push('Consider tenant diversification strategy to reduce concentration risk');
+  }
+
+  if (marketRiskScore < 65) {
+    recommendations.push('Monitor market conditions closely for adverse changes');
+  }
+
+  if (propertyConditionRiskScore < 60) {
+    recommendations.push('Implement a capital improvement plan to address property condition issues');
+  }
+
+  if (locationRiskScore < 70) {
+    recommendations.push('Evaluate location-based improvements to enhance property attractiveness');
+  }
+
   return {
-    score: 1 - (tenantRiskProfile.creditRisk.adjustedScore / 100),
-    factors: {
-      creditQuality: tenantRiskProfile.creditRisk.factors.financialStrength,
-      tenantDiversity: 1 - (tenantRiskProfile.concentration.percentOfRevenue / 100),
-      leaseTerms: Math.min(1, tenantRiskProfile.leaseRisk.leaseTermRemaining / 120),
-      rolloverExposure: 1 - tenantRiskProfile.leaseRisk.defaultProbability
-    }
+    id: `risk-${Date.now()}`,
+    propertyId,
+    type: 'risk',
+    propertyType,
+    riskProfile,
+    marketRisk: {
+      score: marketRiskScore,
+      factors: marketConditions
+    },
+    tenantRisk: {
+      score: tenantRiskScore,
+      factors: tenantFactors
+    },
+    locationRisk: {
+      score: locationRiskScore,
+      factors: locationFactors
+    },
+    propertyConditionRisk: {
+      score: propertyConditionRiskScore,
+      factors: propertyCondition
+    },
+    overallRisk,
+    recommendations,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    status: 'completed',
+    version: 1
   };
 }
 
-function analyzeLocationRiskProfile(locationScore: number) {
-  return {
-    score: Math.max(0, Math.min(1, locationScore)),
-    factors: {
-      accessibility: locationScore * 0.9,
-      demographics: locationScore * 1.1,
-      submarket: locationScore * 0.95,
-      amenities: locationScore * 1.05
-    }
+export function generatePortfolioAnalysis(
+  properties: {
+    id: string;
+    type: PropertyType;
+    value: number;
+    capRate: number;
+    occupancy: number;
+    riskProfile: RiskProfile;
+  }[]
+): PortfolioAnalysis {
+  // Calculate aggregate metrics
+  const totalValue = properties.reduce((sum, p) => sum + p.value, 0);
+  
+  const weightedCapRate = properties.reduce((sum, p) => {
+    const weight = p.value / totalValue;
+    return sum + (p.capRate * weight);
+  }, 0);
+  
+  const averageOccupancy = properties.reduce((sum, p) => sum + p.occupancy, 0) / properties.length;
+  
+  // Helper function to normalize values (0-1 scale)
+  const normalize = (arr: number[]) => {
+    const min = Math.min(...arr);
+    const max = Math.max(...arr);
+    return arr.map(v => (v - min) / (max - min || 1)); // Avoid division by zero
   };
-}
-
-function analyzePropertyConditionRisk(propertyAge: number) {
-  const baseScore = Math.max(0, Math.min(1, 1 - (propertyAge / 50)));
-  return {
-    score: baseScore,
-    factors: {
-      age: baseScore,
-      maintenance: baseScore * 1.1,
-      functionality: baseScore * 0.9,
-      sustainability: baseScore * 0.95
-    }
+  
+  // Calculate diversification score based on property types and risk profiles
+  // The more evenly distributed, the higher the score
+  const calculateDiversificationScore = () => {
+    // Count properties by type
+    const typeCount: Record<string, number> = {};
+    properties.forEach(p => {
+      typeCount[p.type] = (typeCount[p.type] || 0) + 1;
+    });
+    
+    // Calculate Shannon entropy (diversity measure)
+    const typeEntropy = Object.values(typeCount).reduce((entropy, count) => {
+      const p = count / properties.length;
+      return entropy - (p * Math.log2(p));
+    }, 0);
+    
+    // Normalize to 0-100 scale (max entropy depends on number of categories)
+    const maxTypeEntropy = Math.log2(Object.keys(typeCount).length || 1);
+    const typeScore = (typeEntropy / maxTypeEntropy) * 100;
+    
+    // Do the same for risk profiles
+    const riskCount: Record<string, number> = {};
+    properties.forEach(p => {
+      riskCount[p.riskProfile] = (riskCount[p.riskProfile] || 0) + 1;
+    });
+    
+    const riskEntropy = Object.values(riskCount).reduce((entropy, count) => {
+      const p = count / properties.length;
+      return entropy - (p * Math.log2(p));
+    }, 0);
+    
+    const maxRiskEntropy = Math.log2(Object.keys(riskCount).length || 1);
+    const riskScore = (riskEntropy / maxRiskEntropy) * 100;
+    
+    // Average the two scores
+    return (typeScore + riskScore) / 2;
   };
-}
-
-// Portfolio Analysis Helper Functions
-function calculateWeightedCapRateForPortfolio(properties: InvestmentAnalysis[]): number {
-  const totalValue = properties.reduce((sum, p) => sum + p.purchasePrice, 0);
-  return properties.reduce((sum, p) => 
-    sum + (p.metrics.capRate * (p.purchasePrice / totalValue)), 0);
-}
-
-function calculateAverageOccupancyRate(properties: InvestmentAnalysis[]): number {
-  return properties.reduce((sum, p) => sum + p.occupancyRate, 0) / properties.length;
-}
-
-function calculatePortfolioDiversification(properties: InvestmentAnalysis[]): number {
-  const typeDistribution = calculatePropertyTypeDistribution(properties);
-  const maxConcentration = Math.max(...Object.values(typeDistribution));
-  return 1 - (maxConcentration - (1 / Object.keys(typeDistribution).length));
-}
-
-function calculatePortfolioRiskDistribution(properties: InvestmentAnalysis[]): Record<RiskProfile, number> {
-  const distribution = {
-    [RiskProfile.Core]: 0,
-    [RiskProfile.ValueAdd]: 0,
-    [RiskProfile.Opportunistic]: 0
+  
+  const diversificationScore = calculateDiversificationScore();
+  
+  // Calculate distribution by risk profile
+  const riskDistribution: Record<string, number> = {
+    core: 0,
+    valueAdd: 0,
+    opportunistic: 0
   };
   
   properties.forEach(p => {
-    distribution[p.riskProfile]++;
+    riskDistribution[p.riskProfile] += p.value / totalValue * 100;
   });
-
-  const total = properties.length;
-  Object.keys(distribution).forEach(key => {
-    distribution[key as RiskProfile] = distribution[key as RiskProfile] / total;
-  });
-
-  return distribution;
-}
-
-function calculatePropertyTypeDistribution(properties: InvestmentAnalysis[]): Record<PropertyType, number> {
-  const distribution = Object.values(PropertyType).reduce((acc, type) => ({
-    ...acc,
-    [type]: 0
-  }), {} as Record<PropertyType, number>);
-
+  
+  // Calculate distribution by property type
+  const propertyTypeDistribution: Record<string, number> = {
+    office: 0,
+    retail: 0,
+    industrial: 0,
+    multifamily: 0,
+    mixed: 0,
+    other: 0
+  };
+  
   properties.forEach(p => {
-    distribution[p.propertyType]++;
+    propertyTypeDistribution[p.type] += p.value / totalValue * 100;
   });
-
-  const total = properties.length;
-  Object.keys(distribution).forEach(key => {
-    distribution[key as PropertyType] = distribution[key as PropertyType] / total;
-  });
-
-  return distribution;
-}
-
-function calculatePropertyCorrelations(properties: InvestmentAnalysis[]) {
+  
+  // Generate a simple correlation matrix
+  // In a real implementation, this would use historical returns data
+  // Here we're just creating a placeholder
   const propertyIds = properties.map(p => p.id);
-  const values = properties.map(() => new Array(properties.length).fill(0));
+  const n = propertyIds.length;
+  const values: number[][] = [];
   
-  // Simplified correlation calculation
-  for (let i = 0; i < properties.length; i++) {
-    for (let j = 0; j < properties.length; j++) {
+  for (let i = 0; i < n; i++) {
+    values[i] = [];
+    for (let j = 0; j < n; j++) {
       if (i === j) {
-        values[i][j] = 1;
+        values[i][j] = 1; // Self-correlation is 1
       } else {
-        values[i][j] = calculatePairwiseCorrelation(properties[i], properties[j]);
+        // Dummy correlation based on property types
+        const sameType = properties[i].type === properties[j].type;
+        values[i][j] = sameType ? 0.7 : 0.3;
       }
     }
   }
-
-  return { propertyIds, values };
-}
-
-// Utility Functions
-function calculateIRR(noi: number, purchasePrice: number): number {
-  return (noi / purchasePrice) * 100 * 1.1;
-}
-
-function calculateCashOnCash(noi: number, debtService: number, purchasePrice: number): number {
-  const equity = purchasePrice * 0.25;
-  return ((noi - debtService) / equity) * 100;
-}
-
-function calculateLTV(purchasePrice: number): number {
-  return 75;
-}
-
-function calculateBreakEven(operatingExpenses: number, totalRevenue: number): number {
-  return (operatingExpenses / totalRevenue) * 100;
-}
-
-function calculateDebtService(purchasePrice: number): number {
-  const loanAmount = purchasePrice * 0.75;
-  const annualRate = 0.05;
-  const termYears = 30;
-  const monthlyRate = annualRate / 12;
-  const numberOfPayments = termYears * 12;
   
-  return (loanAmount * monthlyRate * Math.pow(1 + monthlyRate, numberOfPayments)) / 
-         (Math.pow(1 + monthlyRate, numberOfPayments) - 1) * 12;
-}
-
-function calculateOperatingExpenses(squareFeet: number): number {
-  return squareFeet * 10;
-}
-
-function calculateTotalRevenue(squareFeet: number, occupancyRate: number): number {
-  return squareFeet * 25 * (occupancyRate / 100);
-}
-
-function generateAnalysisId(): string {
-  return `analysis_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-}
-
-function determineRiskProfile(metrics: FinancialMetrics | null, riskScore: number): RiskProfile {
-  if (riskScore > 0.66) return RiskProfile.Opportunistic;
-  if (riskScore > 0.33) return RiskProfile.ValueAdd;
-  return RiskProfile.Core;
-}
-
-function generateAssumptions(propertyType: PropertyType, marketData: RateEnvironment) {
   return {
-    rentGrowth: 2,
-    expenseGrowth: 3,
-    vacancyRate: 5,
-    capitalReserves: 2,
-    holdingPeriod: 10,
-    exitCapRate: 6
+    id: `port-${Date.now()}`,
+    properties: propertyIds,
+    aggregateMetrics: {
+      totalValue,
+      weightedCapRate,
+      averageOccupancy,
+      diversificationScore
+    },
+    riskDistribution: riskDistribution as any,
+    propertyTypeDistribution: propertyTypeDistribution as any,
+    correlationMatrix: {
+      propertyIds,
+      values
+    },
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    status: 'completed',
+    version: 1,
+    propertyId: 'portfolio', // Portfolio analysis doesn't have a single property
+    type: 'market'
   };
 }
 
-function calculateVolatility(values: number[]): number {
-  const avg = values.reduce((a, b) => a + b, 0) / values.length;
-  const squaredDiffs = values.map(v => Math.pow(v - avg, 2));
-  return Math.sqrt(squaredDiffs.reduce((a, b) => a + b, 0) / values.length);
-}
+// Enums Exports
+export {
+  PropertyType,
+  RiskProfile,
+  CreditRiskLevel,
+  IndustryType
+};
 
-function calculateTrendSlope(values: number[]): number {
-  const n = values.length;
-  const xMean = (n - 1) / 2;
-  const yMean = values.reduce((a, b) => a + b, 0) / n;
-  
-  let numerator = 0;
-  let denominator = 0;
-  
-  for (let i = 0; i < n; i++) {
-    numerator += (i - xMean) * (values[i] - yMean);
-    denominator += Math.pow(i - xMean, 2);
-  }
-  
-  return numerator / denominator;
-}
+// Type Re-exports
+export type {
+  FinancialMetrics,
+  InvestmentAnalysis,
+  RiskAnalysis,
+  PortfolioAnalysis,
+  CreditRiskFactors,
+  CreditRiskWeights,
+  CreditRiskCalculation,
+  TenantRiskProfile,
+  PropertyCreditAnalysis,
+  TenantProfile,
+  LeaseRisk,
+  TenantConcentration,
+  CreditRiskAnalysis,
+  MarketSpread,
+  RateEnvironment,
+  HistoricalData
+};
 
-function calculatePairwiseCorrelation(p1: InvestmentAnalysis, p2: InvestmentAnalysis): number {
-  // Simplified correlation based on property characteristics
-  let correlation = 0;
-  
-  // Same property type increases correlation
-  if (p1.propertyType === p2.propertyType) correlation += 0.3;
-  
-  // Similar cap rates increase correlation
-  const capRateDiff = Math.abs(p1.metrics.capRate - p2.metrics.capRate);
-  correlation += Math.max(0, 0.3 * (1 - capRateDiff / 5));
-  
-  // Similar occupancy rates increase correlation
-  const occDiff = Math.abs(p1.occupancyRate - p2.occupancyRate);
-  correlation += Math.max(0, 0.2 * (1 - occDiff / 50));
-  
-  return Math.min(1, Math.max(-1, correlation));
-}
-
-interface RiskScoreFactors {
-  score: number;
-  factors: Record<string, number>;
-}
-
-function generateRiskRecommendations(
-  marketRisk: RiskScoreFactors,
-  tenantRisk: {
-    score: number;
-    factors: {
-      creditQuality: number;
-      tenantDiversity: number;
-      leaseTerms: number;
-      rolloverExposure: number;
-    };
-  },
-  locationRisk: RiskScoreFactors,
-  propertyConditionRisk: RiskScoreFactors
-): string[] {
-  const recommendations: string[] = [];
-  
-  // Market Risk Recommendations
-  if (marketRisk.score > 0.6) {
-    recommendations.push('Consider market hedging strategies');
-    if (marketRisk.factors.marketLiquidity > 0.7) {
-      recommendations.push('Monitor market liquidity conditions closely');
-    }
-  }
-  
-  // Tenant Risk Recommendations
-  if (tenantRisk.score > 0.6) {
-    recommendations.push('Implement stronger tenant screening procedures');
-    
-    if (tenantRisk.factors.creditQuality > 0.7) {
-      recommendations.push('Review tenant financial statements more frequently');
-    }
-    
-    if (tenantRisk.factors.tenantDiversity < 0.3) {
-      recommendations.push('Consider diversifying tenant mix to reduce concentration risk');
-    }
-    
-    if (tenantRisk.factors.rolloverExposure > 0.7) {
-      recommendations.push('Develop proactive lease renewal strategy');
-    }
-  }
-  
-  // Location Risk Recommendations
-  if (locationRisk.score > 0.6) {
-    recommendations.push('Evaluate potential infrastructure improvements');
-    if (locationRisk.factors.accessibility < 0.4) {
-      recommendations.push('Consider transportation access improvements');
-    }
-  }
-  
-  // Property Condition Risk Recommendations
-  if (propertyConditionRisk.score > 0.6) {
-    recommendations.push('Develop capital improvement plan');
-    if (propertyConditionRisk.factors.sustainability < 0.4) {
-      recommendations.push('Evaluate energy efficiency upgrade opportunities');
-    }
-  }
-  
-  return recommendations;
-}
-
-function calculateOverallRiskScore(scores: number[]): number {
-  return scores.reduce((a, b) => a + b, 0) / scores.length;
-}
-
-// Re-export types
-export * from './types';
+// Type Guard Re-exports
+export {
+  isFinancialMetrics,
+  isInvestmentAnalysis,
+  isRiskAnalysis,
+  isPortfolioAnalysis,
+  isCreditRiskFactors,
+  isCreditRiskWeights,
+  isCreditRiskCalculation,
+  isTenantRiskProfile,
+  isPropertyCreditAnalysis,
+  assessMarketRisk,
+  analyzeSpread
+};

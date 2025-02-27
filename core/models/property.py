@@ -84,8 +84,9 @@ class Property(MongoModel):
     tenants: List[Dict[str, Any]] = Field(default_factory=list)
     metadata: Metadata = Field(default_factory=Metadata)
     
-    class Config:
-        schema_extra = {
+    model_config = {
+        "populate_by_name": True,
+        "json_schema_extra": {
             "example": {
                 "name": "Tech Center Office Building",
                 "property_type": "office",
@@ -112,3 +113,4 @@ class Property(MongoModel):
                 }
             }
         }
+    }

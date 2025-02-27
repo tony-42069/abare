@@ -53,8 +53,9 @@ class Document(MongoModel):
     property_id: Optional[str] = None  # Link to associated property
     related_documents: List[str] = Field(default_factory=list)  # IDs of related documents
     
-    class Config:
-        schema_extra = {
+    model_config = {
+        "populate_by_name": True,
+        "json_schema_extra": {
             "example": {
                 "filename": "property_report.pdf",
                 "file_path": "/uploads/property_report.pdf",
@@ -73,3 +74,4 @@ class Document(MongoModel):
                 }
             }
         }
+    }
